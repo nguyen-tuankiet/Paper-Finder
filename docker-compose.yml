@@ -9,4 +9,9 @@ services:
     environment:
       PORT: "8787"
       TRUST_PROXY: "1"
+    volumes:
+      - paperfinder-data:/app/server/data
     restart: unless-stopped
+
+volumes:
+  paperfinder-data:

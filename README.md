@@ -73,7 +73,8 @@ npm start                   # backend phục vụ luôn web/dist tại http://lo
 | POST | `/api/search` | Tìm kiếm. Trả về NDJSON: các dòng `progress`, rồi một dòng `result`. Đóng kết nối = hủy tác vụ. |
 | POST | `/api/export` | `{format: "xlsx"\|"csv", records: [...]}` → file tải về |
 | GET | `/api/sources` | Danh sách nguồn đang bật và trạng thái kết nối của từng nguồn (cache 60 giây) |
-| GET | `/api/health` | Kiểm tra backend |
+| GET | `/api/health` | Kiểm tra backend (nhẹ, không gọi nguồn dữ liệu; dùng cho bot giám sát) |
+| GET | `/api/admin/stats?days=30` | Thống kê sử dụng; cần header `Authorization: Bearer <ADMIN_PASSWORD>` |
 
 Ví dụ yêu cầu tìm kiếm:
 
@@ -84,6 +85,18 @@ Ví dụ yêu cầu tìm kiếm:
 ```
 
 `maxResults` (20/50/100/200/500) áp dụng cho **mỗi từ khóa trên mỗi nguồn**; tối đa 10 từ khóa mỗi lần.
+
+## Trang quản trị (thống kê sử dụng)
+
+Đặt `ADMIN_PASSWORD` (tối thiểu 8 ký tự) trong `.env` rồi mở `/admin` (ví dụ http://localhost:5173/admin) để xem:
+- Số người dùng và số lượt tìm kiếm: hôm nay, 7 ngày, 30 ngày, toàn bộ; số lượt xuất file; số bài trung bình mỗi lượt tìm.
+- Biểu đồ và bảng theo ngày (thành công, lỗi, hủy), bảng theo nguồn (số lần dùng, tỷ lệ lỗi).
+
+Không đặt `ADMIN_PASSWORD` thì trang và API admin bị tắt (API trả 404). Đăng nhập sai quá 10 lần trong 15 phút sẽ bị chặn tạm thời.
+
+**Quyền riêng tư:** chỉ lưu số đếm theo ngày và mã băm HMAC một chiều của (IP + trình duyệt) để đếm người dùng khác nhau. **Không lưu địa chỉ IP, từ khóa hay nội dung tìm kiếm.** “Người dùng” là thiết bị/mạng khác nhau nên có thể lệch nếu một người dùng nhiều thiết bị hoặc nhiều người chung một mạng. Các lần ping `/api/health` của bot giám sát không bị tính.
+
+**Lưu trữ:** số liệu ghi vào `STATS_FILE` (mặc định `server/data/stats.json`, đã được `.gitignore`), giữ `STATS_RETENTION_DAYS` ngày (mặc định 365). Máy chủ có ổ đĩa tạm (ví dụ Render gói Free) sẽ **mất số liệu khi khởi động lại hoặc deploy lại**; với Docker hãy dùng volume (đã cấu hình sẵn trong `docker-compose.yml`).
 
 ## Cách xử lý dữ liệu
 

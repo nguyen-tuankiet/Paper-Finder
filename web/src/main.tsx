@@ -3,7 +3,11 @@ import viVN from 'antd/locale/vi_VN';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import AdminPage from './AdminPage';
 import './styles.css';
+
+// Chỉ có hai trang nên không cần thư viện router: /admin là trang quản trị, còn lại là trang tìm kiếm.
+const isAdmin = window.location.pathname.replace(/\/+$/, '') === '/admin';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -18,7 +22,7 @@ createRoot(document.getElementById('root')!).render(
         components: { Table: { headerBg: '#f3f5f8' } },
       }}
     >
-      <App />
+      {isAdmin ? <AdminPage /> : <App />}
     </ConfigProvider>
   </StrictMode>,
 );

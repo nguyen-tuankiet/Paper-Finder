@@ -4,3 +4,6 @@ dist/
 *.log
 coverage/
 .vite/
+# Thống kê sử dụng (chứa mã băm người dùng) - không đưa lên git
+data/
+server/data/

@@ -18,6 +18,14 @@ const envSchema = z.object({
   CACHE_TTL_SECONDS: z.coerce.number().int().min(0).max(86400).default(600),
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(10000).default(30),
   TRUST_PROXY: z.string().optional(),
+  /** Mật khẩu trang admin (/admin). Không đặt = trang admin và API admin bị tắt. */
+  ADMIN_PASSWORD: z.string().min(8, 'ADMIN_PASSWORD cần ít nhất 8 ký tự').optional(),
+  /** File JSON lưu thống kê sử dụng. Mặc định: ./data/stats.json (thư mục hiện tại của backend). */
+  STATS_FILE: z.string().optional(),
+  /** Múi giờ để chia ngày thống kê. */
+  STATS_TIMEZONE: z.string().default('Asia/Ho_Chi_Minh'),
+  /** Số ngày giữ thống kê. */
+  STATS_RETENTION_DAYS: z.coerce.number().int().min(7).max(3650).default(365),
   STATIC_DIR: z.string().optional(),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error', 'silent']).default('info'),
 });
@@ -33,6 +41,10 @@ export interface AppConfig {
   cacheTtlMs: number;
   rateLimitPerMinute: number;
   trustProxy?: string;
+  adminPassword?: string;
+  statsFile: string;
+  statsTimezone: string;
+  statsRetentionDays: number;
   staticDir?: string;
   logLevel: LogLevel;
 }
@@ -73,6 +85,10 @@ export function parseConfig(env: Record<string, string | undefined>, cwd = proce
     cacheTtlMs: parsed.CACHE_TTL_SECONDS * 1000,
     rateLimitPerMinute: parsed.RATE_LIMIT_PER_MINUTE,
     trustProxy: parsed.TRUST_PROXY,
+    adminPassword: parsed.ADMIN_PASSWORD,
+    statsFile: parsed.STATS_FILE ? path.resolve(cwd, parsed.STATS_FILE) : path.resolve(cwd, 'data', 'stats.json'),
+    statsTimezone: parsed.STATS_TIMEZONE,
+    statsRetentionDays: parsed.STATS_RETENTION_DAYS,
     staticDir,
     logLevel: parsed.LOG_LEVEL,
   };

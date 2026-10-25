@@ -22,3 +22,6 @@ services:
         sync: false
       - key: SEMANTIC_SCHOLAR_API_KEY
         sync: false
+      # Mật khẩu trang /admin (thống kê sử dụng). Không điền = trang admin bị tắt.
+      - key: ADMIN_PASSWORD
+        sync: false

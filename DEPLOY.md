@@ -33,6 +33,7 @@ Render dùng chung địa chỉ IP gửi đi cho nhiều khách hàng, trong khi
    - `OPENALEX_API_KEY`: key ở bước 2.
    - `CONTACT_EMAIL`: email liên hệ cho Crossref (tùy chọn, có thể để trống).
    - `SEMANTIC_SCHOLAR_API_KEY`: để trống nếu không có (nguồn Semantic Scholar sẽ không được bật).
+   - `ADMIN_PASSWORD`: mật khẩu trang quản trị `/admin` (từ 8 ký tự, nên dài và khó đoán). Để trống thì trang admin bị tắt.
 6. Xem lại danh sách thay đổi (nếu `render.yaml` có lỗi, Render hiện lỗi tại đây), rồi bấm **Deploy Blueprint**.
 7. Mở dịch vụ `paperfinder` → tab **Logs** theo dõi build (vài phút). Khi thấy dòng `server_started` là xong. Địa chỉ nằm ở đầu trang dịch vụ, dạng `https://paperfinder-xxxx.onrender.com`.
 8. Kiểm tra: mở `https://<địa-chỉ>/api/health` phải thấy `{"status":"ok"}`, rồi mở trang chủ và thử tìm kiếm.
@@ -60,6 +61,12 @@ Gói Free của Render ngủ sau 15 phút không có truy cập và mất khoả
 - **Điều khoản nền tảng có thể thay đổi:** nếu Render hạn chế việc giữ dịch vụ miễn phí luôn thức bằng ping, cách này sẽ ngừng hiệu quả. Phương án thay thế là nâng lên gói trả phí nhỏ của Render (chạy liên tục, không ngủ).
 - **Không có đăng nhập:** ai biết địa chỉ đều dùng được. Backend giới hạn số request theo IP (`RATE_LIMIT_PER_MINUTE`, mặc định 30/phút).
 
-## 5. Cập nhật sau này
+## 5. Trang quản trị `/admin` và giới hạn của gói Free
+
+Mở `https://<địa-chỉ>/admin`, nhập `ADMIN_PASSWORD` để xem số người dùng và số lượt tìm.
+
+**Quan trọng:** thống kê được ghi vào một file trên ổ đĩa của máy chủ. Gói Free của Render dùng ổ đĩa tạm, nên **số liệu bị xóa mỗi khi dịch vụ khởi động lại hoặc deploy lại** (Render có thể khởi động lại dịch vụ bất cứ lúc nào, và mỗi lần bạn `git push` cũng deploy lại). Hãy xem số liệu như "từ lần khởi động gần nhất". Muốn giữ lâu dài cần ổ đĩa bền (gói trả phí của Render có Persistent Disk) hoặc lưu thống kê ra một dịch vụ bên ngoài; hiện ứng dụng chưa hỗ trợ cách thứ hai.
+
+## 6. Cập nhật sau này
 
 Dịch vụ thường được bật tự động deploy khi bạn `git push` lên nhánh `main` (xem mục **Settings → Auto-Deploy** của dịch vụ để chắc chắn). Nếu không thấy deploy mới, bấm **Manual Deploy → Deploy latest commit** trong trang dịch vụ.

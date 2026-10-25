@@ -1,4 +1,4 @@
-import type { ExportFormat, PaperRecord, SearchEvent, SearchRequest, SourceHealth } from '../../../shared/types';
+import type { ExportFormat, PaperRecord, SearchEvent, SearchRequest, SourceHealth, UsageReport } from '../../../shared/types';
 import { toExportPayload } from './records';
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
@@ -9,6 +9,7 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly kind: ApiErrorKind,
+    readonly status?: number,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -83,6 +84,13 @@ export async function fetchSourceHealth(signal?: AbortSignal): Promise<SourceHea
   const response = await request('/api/sources', { signal });
   if (!response.ok) throw new ApiError(await readHttpError(response), 'http');
   return (await response.json()) as SourceHealth[];
+}
+
+/** Lấy báo cáo sử dụng cho trang admin. Ném ApiError có `status` 401 (sai mật khẩu), 404 (chưa bật), 429 (bị chặn). */
+export async function fetchUsageReport(password: string, days: number, signal?: AbortSignal): Promise<UsageReport> {
+  const response = await request(`/api/admin/stats?days=${days}`, { headers: { authorization: `Bearer ${password}` }, signal });
+  if (!response.ok) throw new ApiError(await readHttpError(response), 'http', response.status);
+  return (await response.json()) as UsageReport;
 }
 
 /** Yêu cầu backend tạo file rồi tải về bằng tên file `fileName`. */

@@ -3,6 +3,7 @@ import { loadEnvFiles, parseConfig } from './config.js';
 import { HttpClient } from './lib/http.js';
 import { Limiter } from './lib/limiter.js';
 import { createLogger } from './logger.js';
+import { StatsService } from './services/stats.js';
 import { CrossrefAdapter } from './sources/crossref.js';
 import { OpenAlexAdapter } from './sources/openalex.js';
 import { ArxivAdapter } from './sources/arxiv.js';
@@ -42,13 +43,15 @@ if (config.semanticScholarApiKey) {
   adapters.semanticscholar = new SemanticScholarAdapter({ http, limiter: new Limiter(1, 1100), apiKey: config.semanticScholarApiKey });
 }
 
-const app = createApp({ adapters, config, logger });
+const stats = new StatsService({ filePath: config.statsFile, timezone: config.statsTimezone, retentionDays: config.statsRetentionDays, logger });
+const app = createApp({ adapters, config, logger, stats });
 const server = app.listen(config.port, () => {
   logger.info('server_started', {
     port: config.port,
     crossrefPolitePool: Boolean(config.contactEmail),
     openAlexKey: Boolean(config.openAlexApiKey),
     sources: Object.keys(adapters),
+    adminEnabled: Boolean(config.adminPassword),
     serveStatic: Boolean(config.staticDir),
   });
 });
@@ -56,6 +59,7 @@ const server = app.listen(config.port, () => {
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     logger.info('server_stopping', { signal });
+    stats.stop(); // ghi nốt thống kê ra file
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 3000).unref();
   });

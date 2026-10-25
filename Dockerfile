@@ -20,6 +20,9 @@ RUN npm ci --omit=dev -w server --include-workspace-root=false
 COPY --from=build /app/server/dist server/dist
 COPY --from=build /app/web/dist web/dist
 ENV PORT=8787 STATIC_DIR=../web/dist
+# Thư mục ghi thống kê sử dụng; gắn volume vào đây để giữ số liệu khi tạo lại container.
+RUN mkdir -p /app/server/data && chown node:node /app/server/data
+VOLUME ["/app/server/data"]
 EXPOSE 8787
 USER node
 WORKDIR /app/server

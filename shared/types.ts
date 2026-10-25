@@ -112,3 +112,52 @@ export interface SourceHealth {
 }
 
 export type ExportFormat = 'xlsx' | 'csv';
+
+// ---------- Thống kê sử dụng (trang admin) ----------
+
+export interface UsageDay {
+  /** Ngày theo múi giờ cấu hình, dạng YYYY-MM-DD. */
+  date: string;
+  visitors: number;
+  searches: number;
+  searchesCompleted: number;
+  searchesFailed: number;
+  searchesCancelled: number;
+  exports: number;
+  results: number;
+}
+
+export interface UsageWindow {
+  /** Số người dùng khác nhau (mã băm IP + trình duyệt) trong khoảng thời gian. */
+  visitors: number;
+  searches: number;
+  exports: number;
+}
+
+export interface UsageSourceRow {
+  source: SourceId;
+  label: string;
+  /** Số lần nguồn được chọn trong một lượt tìm. */
+  used: number;
+  /** Số lần nguồn lỗi hoàn toàn. */
+  failed: number;
+  /** Số lần nguồn chỉ lấy được một phần. */
+  partial: number;
+}
+
+export interface UsageReport {
+  generatedAt: string;
+  timezone: string;
+  /** Thời điểm bắt đầu ghi thống kê. */
+  trackingSince: string;
+  /** Có ghi ra file để giữ lại sau khi khởi động lại hay không. */
+  persistent: boolean;
+  retentionDays: number;
+  today: UsageWindow;
+  last7Days: UsageWindow;
+  last30Days: UsageWindow;
+  /** Toàn bộ dữ liệu đang lưu (trong thời hạn lưu trữ). */
+  allTime: UsageWindow & { completed: number; failed: number; cancelled: number; averageResultsPerSearch: number };
+  daily: UsageDay[];
+  sources: UsageSourceRow[];
+}
