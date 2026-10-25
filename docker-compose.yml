@@ -1,0 +1,12 @@
+services:
+  paperfinder:
+    build: .
+    ports:
+      - "8787:8787"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PORT: "8787"
+      TRUST_PROXY: "1"
+    restart: unless-stopped

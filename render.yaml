@@ -1,0 +1,24 @@
+# Render Blueprint: một Web Service (Node) phục vụ cả API lẫn giao diện đã build.
+# Xem DEPLOY.md để biết các bước triển khai.
+services:
+  - type: web
+    name: paperfinder
+    runtime: node
+    plan: free
+    # --include=dev vì bước build cần TypeScript, Vite, tsup (devDependencies).
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    # Endpoint nhẹ, không gọi tới API học thuật. UptimeRobot cũng nên ping địa chỉ này.
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: TRUST_PROXY
+        value: "1"
+      # Các giá trị bí mật: điền trong Render Dashboard (không ghi vào file này).
+      - key: OPENALEX_API_KEY
+        sync: false
+      - key: CONTACT_EMAIL
+        sync: false
+      - key: SEMANTIC_SCHOLAR_API_KEY
+        sync: false
