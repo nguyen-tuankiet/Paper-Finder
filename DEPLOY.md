@@ -8,12 +8,12 @@ Một dịch vụ duy nhất phục vụ cả giao diện lẫn API, nên **khô
 
 Render lấy mã từ GitHub. Mã đã được commit sẵn trong thư mục này (`git log` để xem). Bạn cần:
 
-1. Tạo một repository **trống** trên GitHub (ví dụ `paperfinder`, không thêm README/.gitignore).
-2. Ở thư mục dự án, chạy (thay `<tên-bạn>`):
+1. Tạo một repository **trống** trên GitHub (không thêm README/.gitignore).
+2. Ở thư mục dự án, chạy (thay đường dẫn bằng repo của bạn; repo hiện tại là `https://github.com/nguyen-tuankiet/Paper-Finder.git`):
 
 ```powershell
 git branch -M main
-git remote add origin https://github.com/<tên-bạn>/paperfinder.git
+git remote add origin https://github.com/<tên-bạn>/<tên-repo>.git
 git push -u origin main
 ```
 
@@ -25,14 +25,19 @@ Render dùng chung địa chỉ IP gửi đi cho nhiều khách hàng, trong khi
 
 ## 3. Tạo dịch vụ trên Render
 
-1. Đăng nhập https://dashboard.render.com bằng GitHub.
-2. **New → Blueprint**, chọn repository `paperfinder`. Render đọc file `render.yaml` và tạo sẵn dịch vụ.
-3. Khi được hỏi các biến bí mật, điền:
+1. Đăng nhập https://dashboard.render.com (nên dùng "Sign in with GitHub").
+2. Bấm **New → Blueprint**. Nếu chưa kết nối GitHub, Render yêu cầu cấp quyền cho repository (chọn đúng repo `Paper-Finder`, không cần cấp cho toàn bộ tài khoản).
+3. Tìm repo `Paper-Finder` trong danh sách và bấm **Connect**.
+4. Ở form: đặt tên Blueprint (tùy ý), chọn nhánh `main`, để trống **Blueprint Path** (mặc định là `render.yaml` ở thư mục gốc).
+5. Điền giá trị cho các biến bí mật mà Render yêu cầu (đều khai báo `sync: false` trong `render.yaml`):
    - `OPENALEX_API_KEY`: key ở bước 2.
    - `CONTACT_EMAIL`: email liên hệ cho Crossref (tùy chọn, có thể để trống).
    - `SEMANTIC_SCHOLAR_API_KEY`: để trống nếu không có (nguồn Semantic Scholar sẽ không được bật).
-4. Bấm **Apply** và chờ build xong (vài phút). Địa chỉ có dạng `https://paperfinder-xxxx.onrender.com`.
-5. Kiểm tra: mở `https://<địa-chỉ>/api/health` phải thấy `{"status":"ok"}`, rồi mở trang chủ và thử tìm kiếm.
+6. Xem lại danh sách thay đổi (nếu `render.yaml` có lỗi, Render hiện lỗi tại đây), rồi bấm **Deploy Blueprint**.
+7. Mở dịch vụ `paperfinder` → tab **Logs** theo dõi build (vài phút). Khi thấy dòng `server_started` là xong. Địa chỉ nằm ở đầu trang dịch vụ, dạng `https://paperfinder-xxxx.onrender.com`.
+8. Kiểm tra: mở `https://<địa-chỉ>/api/health` phải thấy `{"status":"ok"}`, rồi mở trang chủ và thử tìm kiếm.
+
+Nếu quên điền hoặc muốn đổi biến sau này: vào dịch vụ → **Environment** → sửa → Render tự deploy lại.
 
 ## 4. UptimeRobot để dịch vụ không "ngủ"
 
@@ -57,4 +62,4 @@ Gói Free của Render ngủ sau 15 phút không có truy cập và mất khoả
 
 ## 5. Cập nhật sau này
 
-Mỗi lần bạn `git push` lên nhánh `main`, Render tự build và deploy lại.
+Dịch vụ thường được bật tự động deploy khi bạn `git push` lên nhánh `main` (xem mục **Settings → Auto-Deploy** của dịch vụ để chắc chắn). Nếu không thấy deploy mới, bấm **Manual Deploy → Deploy latest commit** trong trang dịch vụ.
