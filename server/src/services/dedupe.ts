@@ -81,6 +81,15 @@ export function mergeRecords(members: PaperRecord[]): PaperRecord {
     if (other.abstract.length > base.abstract.length) base.abstract = other.abstract;
   }
 
+  // Truy cập mở: chỉ cần một nguồn xác nhận là bản mở thì bài được coi là miễn phí. URL, giấy phép và trạng thái
+  // chỉ lấy từ các bản ghi xác nhận là mở (tránh trạng thái "closed" của nguồn này che bản mở của nguồn khác).
+  const openMembers = sorted.filter((m) => m.isOpenAccess);
+  base.isOpenAccess = openMembers.length > 0;
+  base.oaPdfUrl = openMembers.find((m) => m.oaPdfUrl)?.oaPdfUrl ?? '';
+  base.oaUrl = openMembers.find((m) => m.oaUrl)?.oaUrl ?? '';
+  base.oaLicense = openMembers.find((m) => m.oaLicense)?.oaLicense ?? '';
+  base.oaStatus = (openMembers.find((m) => m.oaStatus) ?? base).oaStatus;
+
   base.sources = [...new Set(members.flatMap((m) => m.sources))];
   base.queryKeywords = [...new Set(members.flatMap((m) => m.queryKeywords))];
   const refs = new Map<string, PaperRecord['sourceRefs'][number]>();

@@ -55,7 +55,7 @@ function ResultsView({ result, online }: { result: SearchResult; online: boolean
         <NoResults result={result} />
       ) : (
         <>
-          <StatsBar stats={stats} suspectedCount={pendingPairs.length} onShowSuspected={() => setDupOpen(true)} />
+          <StatsBar stats={stats} suspectedCount={pendingPairs.length} freeCount={records.filter((r) => r.isOpenAccess).length} onShowSuspected={() => setDupOpen(true)} />
           <ExportPanel allRecords={records} filtered={filtered} selectedIds={selectedIds} online={online} />
           <ResultsTable
             allRecords={records}

@@ -1,6 +1,7 @@
 import type { Author, PaperRecord } from '../../../shared/types.js';
 import { normalizeDoi, doiUrl } from '../lib/doi.js';
 import { UpstreamError, toUpstreamError } from '../lib/errors.js';
+import { openAccess } from '../lib/oa.js';
 import type { HttpClient } from '../lib/http.js';
 import type { Limiter } from '../lib/limiter.js';
 import { cleanAbstract, cleanText, safeHttpUrl } from '../lib/text.js';
@@ -111,6 +112,8 @@ export function mapCrossrefItem(raw: unknown, keyword: string, retrievedAt: stri
     documentType: type,
     isPreprint: type === 'posted-content',
     abstract: cleanAbstract(item.abstract),
+    // Crossref không cho biết chắc bài có bản mở hay không nên không suy đoán; trạng thái được bổ sung khi gộp với nguồn khác.
+    ...openAccess(),
     sources: ['crossref'],
     sourceRefs: doi ? [{ source: 'crossref', sourceId: doi, url: doiUrl(doi) }] : [],
     originalUrl: safeHttpUrl(item.URL) || (doi ? doiUrl(doi) : ''),

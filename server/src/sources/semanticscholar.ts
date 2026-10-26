@@ -1,13 +1,14 @@
 import type { PaperRecord } from '../../../shared/types.js';
 import { doiUrl, normalizeDoi } from '../lib/doi.js';
 import { UpstreamError, toUpstreamError } from '../lib/errors.js';
+import { openAccess } from '../lib/oa.js';
 import type { HttpClient } from '../lib/http.js';
 import type { Limiter } from '../lib/limiter.js';
 import { cleanAbstract, cleanText, safeHttpUrl } from '../lib/text.js';
 import { Collector, toYear } from './collector.js';
 import type { AdapterResult, AdapterSearchParams, SourceAdapter } from './types.js';
 
-const FIELDS = 'title,externalIds,year,authors,venue,journal,publicationTypes,abstract,url';
+const FIELDS = 'title,externalIds,year,authors,venue,journal,publicationTypes,abstract,url,isOpenAccess,openAccessPdf';
 const PAGE_SIZE = 100;
 /** Giới hạn của endpoint search: offset + limit < 1000. */
 const MAX_DEPTH = 999;
@@ -24,6 +25,8 @@ interface S2Paper {
   publicationTypes?: string[] | null;
   abstract?: string | null;
   url?: string | null;
+  isOpenAccess?: boolean | null;
+  openAccessPdf?: { url?: string | null; status?: string | null; license?: string | null } | null;
 }
 
 interface S2Response {
@@ -54,6 +57,12 @@ export function mapSemanticScholarPaper(raw: unknown, keyword: string, retrieved
     documentType: Array.isArray(paper.publicationTypes) && paper.publicationTypes[0] ? paper.publicationTypes[0] : '',
     isPreprint: PREPRINT_VENUE.test(venue),
     abstract: cleanAbstract(paper.abstract),
+    ...openAccess({
+      isOpenAccess: paper.isOpenAccess === true || Boolean(paper.openAccessPdf?.url),
+      oaStatus: paper.openAccessPdf?.status ?? '',
+      oaPdfUrl: paper.openAccessPdf?.url ?? '',
+      oaLicense: paper.openAccessPdf?.license ?? '',
+    }),
     sources: ['semanticscholar'],
     sourceRefs: [{ source: 'semanticscholar', sourceId: paper.paperId, url: pageUrl }],
     originalUrl: doi ? doiUrl(doi) : pageUrl,

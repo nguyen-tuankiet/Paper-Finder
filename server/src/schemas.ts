@@ -57,6 +57,9 @@ const exportRecordSchema = z.object({
   sources: z.array(z.string().max(50)).max(10),
   originalUrl: z.string().max(5000),
   queryKeywords: z.array(z.string().max(500)).max(50),
+  oaUrl: z.string().max(5000).optional(),
+  oaPdfUrl: z.string().max(5000).optional(),
+  oaLicense: z.string().max(100).optional(),
 });
 
 export const exportRequestSchema = z.object({

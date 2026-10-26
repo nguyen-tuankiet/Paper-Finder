@@ -2,7 +2,7 @@ import { CopyOutlined } from '@ant-design/icons';
 import { Button, Descriptions, Drawer, Space, Tag, Typography, message } from 'antd';
 import type { PaperRecord } from '../../../shared/types';
 import { copyText } from '../lib/clipboard';
-import { NO_DATA, SOURCE_LABELS, docTypeLabel, doiUrl } from '../lib/records';
+import { NO_DATA, SOURCE_LABELS, docTypeLabel, doiUrl, formatLicense, publisherUrl } from '../lib/records';
 
 const muted = (text: string) => <Typography.Text type="secondary">{text}</Typography.Text>;
 
@@ -69,6 +69,44 @@ export function DetailDrawer({ record, onClose }: { record: PaperRecord | null; 
                 <Tag color="orange" style={{ marginLeft: 8 }}>
                   Preprint — chưa chắc đã qua bình duyệt
                 </Tag>
+              )}
+            </Descriptions.Item>
+            <Descriptions.Item label="Truy cập">
+              {record.isOpenAccess ? (
+                <Space direction="vertical" size={4}>
+                  <span>
+                    <Tag color="green">Miễn phí (truy cập mở)</Tag>
+                    {record.oaLicense && <span>Giấy phép: {formatLicense(record.oaLicense)}</span>}
+                    {record.oaStatus && <Typography.Text type="secondary"> · loại: {record.oaStatus}</Typography.Text>}
+                  </span>
+                  <Space wrap>
+                    {record.oaPdfUrl && (
+                      <Button size="small" type="primary" href={record.oaPdfUrl} target="_blank" rel="noopener noreferrer">
+                        Tải PDF
+                      </Button>
+                    )}
+                    {record.oaUrl && (
+                      <Button size="small" href={record.oaUrl} target="_blank" rel="noopener noreferrer">
+                        Đọc toàn văn
+                      </Button>
+                    )}
+                  </Space>
+                </Space>
+              ) : (
+                <Space direction="vertical" size={4}>
+                  <span>
+                    <Tag>Chưa thấy bản miễn phí</Tag>
+                    {record.oaStatus === 'closed' && <Typography.Text type="secondary">Nguồn ghi nhận là đóng (closed).</Typography.Text>}
+                  </span>
+                  {publisherUrl(record) && (
+                    <Button size="small" href={publisherUrl(record)} target="_blank" rel="noopener noreferrer">
+                      Trang nhà xuất bản
+                    </Button>
+                  )}
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    Bài có thể mất phí, hoặc đọc được qua thư viện/trường học của bạn. Dữ liệu truy cập mở của các nguồn có thể chưa đầy đủ.
+                  </Typography.Text>
+                </Space>
               )}
             </Descriptions.Item>
             <Descriptions.Item label="Nguồn dữ liệu">

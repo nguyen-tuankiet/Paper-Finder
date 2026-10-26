@@ -1,4 +1,4 @@
-import { CopyOutlined, EyeOutlined } from '@ant-design/icons';
+import { CopyOutlined, DownloadOutlined, EyeOutlined, LinkOutlined, ReadOutlined } from '@ant-design/icons';
 import { Button, Input, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import type { SorterResult } from 'antd/es/table/interface';
@@ -11,6 +11,8 @@ import {
   authorsShort,
   docTypeLabel,
   doiUrl,
+  formatLicense,
+  publisherUrl,
   sortByYear,
   type ResultFilters,
 } from '../lib/records';
@@ -26,6 +28,49 @@ interface Props {
 }
 
 const muted = (text: string) => <Typography.Text type="secondary">{text}</Typography.Text>;
+
+/**
+ * Cột "Truy cập": có bản mở -> nhãn Miễn phí + nút tải PDF (hoặc đọc toàn văn);
+ * chưa thấy bản mở -> nút tới trang nhà xuất bản. Nút luôn mở link gốc của nơi cung cấp, không qua máy chủ PaperFinder.
+ */
+export function AccessCell({ record }: { record: PaperRecord }) {
+  if (record.isOpenAccess) {
+    return (
+      <Space direction="vertical" size={4}>
+        <Space size={6} wrap>
+          <Tooltip title="Có bản đọc miễn phí hợp pháp (truy cập mở) theo dữ liệu của nguồn.">
+            <Tag color="green" style={{ marginInlineEnd: 0 }}>
+              Miễn phí
+            </Tag>
+          </Tooltip>
+          {record.oaLicense && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{formatLicense(record.oaLicense)}</Typography.Text>}
+        </Space>
+        {record.oaPdfUrl ? (
+          <Button size="small" type="primary" ghost icon={<DownloadOutlined />} href={record.oaPdfUrl} target="_blank" rel="noopener noreferrer">
+            Tải PDF
+          </Button>
+        ) : record.oaUrl ? (
+          <Button size="small" icon={<ReadOutlined />} href={record.oaUrl} target="_blank" rel="noopener noreferrer">
+            Đọc toàn văn
+          </Button>
+        ) : null}
+      </Space>
+    );
+  }
+  const url = publisherUrl(record);
+  return (
+    <Space direction="vertical" size={4}>
+      <Tooltip title="Các nguồn chưa cho biết bài có bản miễn phí. Có thể phải trả phí hoặc có quyền truy cập qua thư viện, trường học.">
+        <Tag style={{ marginInlineEnd: 0, whiteSpace: 'normal' }}>Chưa thấy bản miễn phí</Tag>
+      </Tooltip>
+      {url && (
+        <Button size="small" icon={<LinkOutlined />} href={url} target="_blank" rel="noopener noreferrer">
+          Trang nhà xuất bản
+        </Button>
+      )}
+    </Space>
+  );
+}
 
 export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, selectedIds, onSelectionChange, onShowDetail }: Props) {
   const [yearOrder, setYearOrder] = useState<'ascend' | 'descend' | null>(null);
@@ -151,6 +196,12 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
       ),
     },
     {
+      title: 'Truy cập',
+      key: 'access',
+      width: 190,
+      render: (_value, record) => <AccessCell record={record} />,
+    },
+    {
       title: 'Thao tác',
       key: 'actions',
       width: 96,
@@ -211,6 +262,17 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
           style={{ minWidth: 160 }}
           aria-label="Lọc theo nguồn"
         />
+        <Select
+          value={filters.access}
+          onChange={(access) => set({ access })}
+          options={[
+            { value: 'all', label: 'Mọi truy cập' },
+            { value: 'free', label: 'Miễn phí' },
+            { value: 'notfound', label: 'Chưa thấy bản miễn phí' },
+          ]}
+          style={{ minWidth: 190 }}
+          aria-label="Lọc theo truy cập miễn phí"
+        />
         {types.length > 1 && (
           <Select
             value={filters.type}
@@ -242,7 +304,7 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
         columns={columns}
         dataSource={data}
         onChange={handleChange}
-        scroll={{ x: 1250 }}
+        scroll={{ x: 1440 }}
         sticky
         locale={{ emptyText: 'Không có bài báo nào khớp bộ lọc hiện tại.' }}
         pagination={{ current: page, pageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `${total} bài` }}

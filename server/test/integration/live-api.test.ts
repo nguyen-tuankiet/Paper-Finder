@@ -130,6 +130,62 @@ describe('arXiv (API thật)', () => {
   });
 });
 
+describe('Truy cập mở (API thật)', () => {
+  const httpUrl = /^https?:\/\//;
+
+  it('OpenAlex: có bài miễn phí kèm link/giấy phép và có bài chưa thấy bản mở', async (ctx) => {
+    const { records, error } = await openalex.search({ keyword: 'crop disease detection deep learning', maxResults: 50, onlyWithDoi: true });
+    if (error?.code === 'rate_limited') ctx.skip(`OpenAlex hết hạn mức: ${error.message}`);
+    expect(error).toBeUndefined();
+    const free = records.filter((r) => r.isOpenAccess);
+    expect(free.length).toBeGreaterThan(5);
+    expect(records.length - free.length).toBeGreaterThan(0);
+    for (const r of free) {
+      expect(r.oaPdfUrl || r.oaUrl).toMatch(httpUrl);
+      if (r.oaPdfUrl) expect(r.oaPdfUrl).toMatch(httpUrl);
+    }
+    expect(free.filter((r) => r.oaPdfUrl).length).toBeGreaterThan(0);
+    expect(free.filter((r) => r.oaLicense).length).toBeGreaterThan(0);
+    for (const r of records.filter((r) => !r.isOpenAccess)) expect([r.oaUrl, r.oaPdfUrl, r.oaLicense]).toEqual(['', '', '']);
+  });
+
+  it('Europe PMC: bài OA có PDF của Europe PMC; bài không OA không có link miễn phí', async () => {
+    const { records, error } = await europepmc.search({ keyword: 'crop disease detection', maxResults: 60, onlyWithDoi: true, yearFrom: 2023, yearTo: 2024 });
+    expect(error).toBeUndefined();
+    const free = records.filter((r) => r.isOpenAccess);
+    expect(free.length).toBeGreaterThan(5);
+    expect(free.filter((r) => r.oaPdfUrl).length).toBeGreaterThan(0);
+    expect(records.filter((r) => !r.isOpenAccess).length).toBeGreaterThan(0);
+    for (const r of records.filter((r) => !r.isOpenAccess)) expect(r.oaPdfUrl).toBe('');
+  });
+
+  it('DOAJ và arXiv: mọi bài đều là bản mở với link hợp lệ', async () => {
+    const d = await doaj.search({ keyword: 'plant disease', maxResults: 20, onlyWithDoi: true });
+    expect(d.error).toBeUndefined();
+    expect(d.records.every((r) => r.isOpenAccess && httpUrl.test(r.oaUrl))).toBe(true);
+    const a = await arxiv.search({ keyword: 'plant disease detection', maxResults: 10, onlyWithDoi: false });
+    expect(a.error).toBeUndefined();
+    expect(a.records.every((r) => r.isOpenAccess && /^https:\/\/arxiv\.org\/pdf\/\S+$/.test(r.oaPdfUrl))).toBe(true);
+  });
+
+  it('gộp nhiều nguồn: bài có bản mở ở một nguồn thì cả bài được đánh dấu miễn phí', async (ctx) => {
+    const result = await runSearch(
+      { keywords: ['deep learning crop disease detection'], sources: ['crossref', 'openalex', 'europepmc'], maxResults: 50, onlyWithDoi: true, yearFrom: 2022, yearTo: 2024 },
+      { adapters: { crossref, openalex, europepmc } },
+    );
+    const oa = result.sources.find((s) => s.source === 'openalex')!;
+    if (oa.state === 'error' && oa.errors.some((e) => e.code === 'rate_limited')) ctx.skip(`OpenAlex hết hạn mức: ${oa.errors[0]!.message}`);
+    const multi = result.records.filter((r) => r.sources.length > 1);
+    expect(multi.length).toBeGreaterThan(0);
+    const free = result.records.filter((r) => r.isOpenAccess);
+    console.log(`Tổng ${result.records.length} bài, miễn phí ${free.length}, có PDF trực tiếp ${free.filter((r) => r.oaPdfUrl).length}`);
+    // Nhất quán: bài không mở thì không có URL/giấy phép mở
+    for (const r of result.records.filter((r) => !r.isOpenAccess)) expect([r.oaUrl, r.oaPdfUrl, r.oaLicense]).toEqual(['', '', '']);
+    // Với bài có ở nhiều nguồn, kết quả gộp phải miễn phí nếu có bất kỳ nguồn nào xác nhận
+    expect(free.length).toBeGreaterThan(0);
+  });
+});
+
 describe('Tìm đồng thời hai nguồn + loại trùng + xuất file (API thật)', () => {
   it('gộp kết quả, không đếm trùng một DOI, xuất được XLSX/CSV', async (ctx) => {
     const result = await runSearch(

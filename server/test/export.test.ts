@@ -54,7 +54,17 @@ describe('CSV', () => {
     expect([...buffer.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
     const rows = parseCsv(buffer.toString('utf8').slice(1));
     expect(rows[0]).toEqual([...EXPORT_COLUMNS]);
-    expect(rows[0]).toEqual(['STT', 'Title', 'DOI', 'Authors', 'Publication Year', 'Journal', 'Publisher', 'Document Type', 'Abstract', 'Source', 'Original URL', 'Search Keyword']);
+    expect(rows[0]).toEqual(['STT', 'Title', 'DOI', 'Authors', 'Publication Year', 'Journal', 'Publisher', 'Document Type', 'Abstract', 'Source', 'Original URL', 'Search Keyword', 'Open Access URL', 'License']);
+  });
+
+  it('cột Open Access URL ưu tiên PDF, License được định dạng; bài không mở thì để trống', () => {
+    const open = exportRecord(1, { oaPdfUrl: 'https://x.org/a.pdf', oaUrl: 'https://x.org/a', oaLicense: 'cc-by-nc-nd' });
+    const pageOnly = exportRecord(2, { oaUrl: 'https://x.org/page', oaLicense: 'cc by' });
+    const closed = exportRecord(3);
+    const rows = parseCsv(toCsv([open, pageOnly, closed]).toString('utf8').slice(1));
+    expect(rows[1]!.slice(12)).toEqual(['https://x.org/a.pdf', 'CC BY-NC-ND']);
+    expect(rows[2]!.slice(12)).toEqual(['https://x.org/page', 'CC BY']);
+    expect(rows[3]!.slice(12)).toEqual(['', '']);
   });
 
   it('giữ nguyên ký tự tiếng Việt, tác giả/nguồn/từ khóa phân cách bằng dấu chấm phẩy', () => {
@@ -72,6 +82,8 @@ describe('CSV', () => {
       'Crossref; OpenAlex',
       'https://doi.org/10.1000/test.1',
       'trí tuệ nhân tạo; machine learning',
+      '', // Open Access URL: bài này không có bản mở
+      '', // License
     ]);
   });
 
@@ -125,6 +137,13 @@ describe('XLSX', () => {
     expect(sheet.getCell('C2').value).toMatchObject({ text: '10.1000/test.1', hyperlink: 'https://doi.org/10.1000/test.1' });
     expect(sheet.getCell('K2').value).toMatchObject({ hyperlink: 'https://doi.org/10.1000/test.1' });
     expect(sheet.views[0]).toMatchObject({ state: 'frozen', ySplit: 1 });
+  });
+
+  it('Open Access URL là hyperlink, License hiển thị; đủ 14 cột', async () => {
+    const sheet = (await load(await toXlsx([exportRecord(1, { oaPdfUrl: 'https://x.org/a.pdf', oaLicense: 'cc-by' })]))).worksheets[0]!;
+    expect(sheet.getRow(1).values).toEqual([undefined, ...EXPORT_COLUMNS]);
+    expect(sheet.getCell('M2').value).toMatchObject({ text: 'https://x.org/a.pdf', hyperlink: 'https://x.org/a.pdf' });
+    expect(sheet.getCell('N2').value).toBe('CC BY');
   });
 
   it('ô bắt đầu bằng "=" được lưu là văn bản, không phải công thức', async () => {

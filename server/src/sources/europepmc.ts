@@ -1,6 +1,7 @@
 import type { Author, PaperRecord } from '../../../shared/types.js';
 import { doiUrl, normalizeDoi } from '../lib/doi.js';
 import { UpstreamError, toUpstreamError } from '../lib/errors.js';
+import { openAccess } from '../lib/oa.js';
 import type { HttpClient } from '../lib/http.js';
 import type { Limiter } from '../lib/limiter.js';
 import { cleanAbstract, cleanText } from '../lib/text.js';
@@ -29,6 +30,27 @@ interface EpmcResult {
   firstPublicationDate?: string;
   pubTypeList?: { pubType?: string[] };
   abstractText?: string;
+  isOpenAccess?: string;
+  license?: string;
+  fullTextUrlList?: { fullTextUrl?: { availabilityCode?: string; documentStyle?: string; site?: string; url?: string }[] };
+}
+
+/**
+ * Europe PMC đánh dấu từng link toàn văn: OA = truy cập mở, F = miễn phí, S = cần đăng ký/mua.
+ * Bài được coi là miễn phí khi cờ isOpenAccess = Y hoặc có link OA/F thật sự dẫn tới toàn văn.
+ */
+export function europePmcOpenAccess(result: EpmcResult) {
+  const urls = Array.isArray(result.fullTextUrlList?.fullTextUrl) ? result.fullTextUrlList.fullTextUrl : [];
+  const free = urls.filter((u) => u?.availabilityCode === 'OA' || u?.availabilityCode === 'F');
+  const hasOaLink = urls.some((u) => u?.availabilityCode === 'OA');
+  const pdf = free.find((u) => u.documentStyle === 'pdf')?.url;
+  const page = free.find((u) => u.documentStyle === 'html')?.url ?? free.find((u) => u.documentStyle === 'doi' && u.availabilityCode === 'OA')?.url;
+  return openAccess({
+    isOpenAccess: result.isOpenAccess === 'Y' || hasOaLink,
+    oaPdfUrl: pdf,
+    oaUrl: page,
+    oaLicense: result.license, // chỉ được giữ khi bài là bản mở (xem openAccess())
+  });
 }
 
 interface EpmcResponse {
@@ -80,6 +102,7 @@ export function mapEuropePmcResult(raw: unknown, keyword: string, retrievedAt: s
     documentType: isPreprint ? 'preprint' : (pubTypes.find((t) => t === 'Journal Article') ?? pubTypes[0] ?? ''),
     isPreprint,
     abstract: cleanAbstract(result.abstractText),
+    ...europePmcOpenAccess(result),
     sources: ['europepmc'],
     sourceRefs: [{ source: 'europepmc', sourceId: `${result.source}:${result.id}`, url }],
     originalUrl: url,

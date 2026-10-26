@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PaperRecord } from '../../../shared/types';
-import { DEFAULT_FILTERS, authorsShort, docTypeLabel, exportFileName, filterRecords, parseKeywords, sortByYear, toExportPayload } from './records';
+import { DEFAULT_FILTERS, authorsShort, docTypeLabel, exportFileName, filterRecords, formatLicense, parseKeywords, publisherUrl, sortByYear, toExportPayload } from './records';
 
 function rec(overrides: Partial<PaperRecord>): PaperRecord {
   return {
@@ -14,6 +14,11 @@ function rec(overrides: Partial<PaperRecord>): PaperRecord {
     documentType: '',
     isPreprint: false,
     abstract: '',
+    isOpenAccess: false,
+    oaStatus: '',
+    oaUrl: '',
+    oaPdfUrl: '',
+    oaLicense: '',
     sources: ['crossref'],
     sourceRefs: [],
     originalUrl: '',
@@ -43,6 +48,33 @@ describe('filterRecords', () => {
     expect(filterRecords(data, { ...DEFAULT_FILTERS, source: 'openalex' }).map((r) => r.id)).toEqual(['a', 'b']);
     expect(filterRecords(data, { ...DEFAULT_FILTERS, source: 'both' }).map((r) => r.id)).toEqual(['a']);
     expect(filterRecords(data, { ...DEFAULT_FILTERS, type: 'preprint' }).map((r) => r.id)).toEqual(['b']);
+  });
+});
+
+describe('lọc theo truy cập (miễn phí / chưa thấy bản miễn phí)', () => {
+  const free = rec({ id: 'f', doi: '10.1/f', isOpenAccess: true, oaPdfUrl: 'https://a.org/f.pdf', oaLicense: 'cc-by' });
+  const closed = rec({ id: 'c', doi: '10.1/c' });
+  const items = [free, closed];
+  it('free / notfound / all', () => {
+    expect(filterRecords(items, { ...DEFAULT_FILTERS, access: 'free' }).map((r) => r.id)).toEqual(['f']);
+    expect(filterRecords(items, { ...DEFAULT_FILTERS, access: 'notfound' }).map((r) => r.id)).toEqual(['c']);
+    expect(filterRecords(items, { ...DEFAULT_FILTERS, access: 'all' })).toHaveLength(2);
+  });
+  it('kết hợp với bộ lọc khác', () => {
+    expect(filterRecords(items, { ...DEFAULT_FILTERS, access: 'free', doi: 'without' })).toHaveLength(0);
+  });
+  it('publisherUrl ưu tiên DOI, rồi URL gốc', () => {
+    expect(publisherUrl(closed)).toBe('https://doi.org/10.1/c');
+    expect(publisherUrl(rec({ originalUrl: 'https://p.org/x' }))).toBe('https://p.org/x');
+    expect(publisherUrl(rec({}))).toBe('');
+  });
+  it('formatLicense', () => {
+    expect(formatLicense('cc-by-nc-nd')).toBe('CC BY-NC-ND');
+    expect(formatLicense('cc0')).toBe('CC0');
+  });
+  it('toExportPayload gửi kèm link mở và giấy phép', () => {
+    const [item] = toExportPayload([free]);
+    expect(item).toMatchObject({ oaPdfUrl: 'https://a.org/f.pdf', oaLicense: 'cc-by' });
   });
 });
 

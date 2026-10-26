@@ -28,9 +28,23 @@ export interface ResultFilters {
   doi: 'all' | 'with' | 'without';
   source: 'all' | SourceId | 'both';
   type: string;
+  /** free = có bản đọc miễn phí; notfound = chưa thấy bản miễn phí (không có nghĩa chắc chắn mất phí). */
+  access: 'all' | 'free' | 'notfound';
 }
 
-export const DEFAULT_FILTERS: ResultFilters = { text: '', doi: 'all', source: 'all', type: '' };
+export const DEFAULT_FILTERS: ResultFilters = { text: '', doi: 'all', source: 'all', type: '', access: 'all' };
+
+/** "cc-by-nc-nd" -> "CC BY-NC-ND", "cc by" -> "CC BY", "cc0" -> "CC0"; giấy phép khác giữ nguyên. */
+export function formatLicense(license: string): string {
+  const value = license.trim();
+  if (/^cc[\s-]/i.test(value)) return value.replace(/^cc[\s-]+/i, 'CC ').toUpperCase().replace(/\s+/g, ' ');
+  return /^cc\d/i.test(value) ? value.toUpperCase() : value;
+}
+
+/** Trang để khách xem/mua khi chưa có bản miễn phí: ưu tiên DOI (chuyển thẳng tới nhà xuất bản), nếu không thì URL gốc. */
+export function publisherUrl(record: PaperRecord): string {
+  return record.doi ? doiUrl(record.doi) : record.originalUrl;
+}
 
 /** Bỏ dấu + chữ thường để tìm kiếm tiếng Việt không phụ thuộc dấu. */
 export function fold(value: string): string {
@@ -50,6 +64,8 @@ export function filterRecords(records: PaperRecord[], filters: ResultFilters): P
     if (filters.source === 'both' && record.sources.length < 2) return false;
     if (filters.source !== 'all' && filters.source !== 'both' && !record.sources.includes(filters.source)) return false;
     if (filters.type && record.documentType !== filters.type) return false;
+    if (filters.access === 'free' && !record.isOpenAccess) return false;
+    if (filters.access === 'notfound' && record.isOpenAccess) return false;
     if (needle) {
       const haystack = fold(
         [record.title, record.doi, record.journal, record.publisher, record.authors.map((a) => a.name).join(' '), record.queryKeywords.join(' ')].join(' '),
@@ -122,6 +138,9 @@ export function toExportPayload(records: PaperRecord[]) {
     sources: r.sources,
     originalUrl: r.originalUrl,
     queryKeywords: r.queryKeywords,
+    oaUrl: r.oaUrl,
+    oaPdfUrl: r.oaPdfUrl,
+    oaLicense: r.oaLicense,
   }));
 }
 

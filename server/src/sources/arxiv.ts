@@ -2,6 +2,7 @@ import { XMLParser } from 'fast-xml-parser';
 import type { PaperRecord } from '../../../shared/types.js';
 import { normalizeDoi } from '../lib/doi.js';
 import { UpstreamError, toUpstreamError } from '../lib/errors.js';
+import { openAccess } from '../lib/oa.js';
 import type { HttpClient } from '../lib/http.js';
 import type { Limiter } from '../lib/limiter.js';
 import { cleanAbstract, cleanText, safeHttpUrl } from '../lib/text.js';
@@ -53,6 +54,8 @@ export function mapArxivEntry(raw: unknown, keyword: string, retrievedAt: string
     documentType: 'preprint',
     isPreprint: true,
     abstract: cleanAbstract(xmlText(entry.summary)),
+    // Mọi bài trên arXiv đều đọc miễn phí; PDF nằm ở địa chỉ chuẩn của arXiv. Giấy phép do từng tác giả chọn nên không nêu.
+    ...openAccess({ isOpenAccess: true, oaUrl: url, oaPdfUrl: `https://arxiv.org/pdf/${arxivId}` }),
     sources: ['arxiv'],
     sourceRefs: [{ source: 'arxiv', sourceId: arxivId, url }],
     originalUrl: url,

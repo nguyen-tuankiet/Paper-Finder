@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import type { ExportFormat } from '../../../shared/types.js';
 import { doiUrl } from '../lib/doi.js';
+import { formatLicense } from '../lib/oa.js';
 
 /** Dữ liệu tối thiểu cần cho việc xuất file (client gửi lại danh sách đã chọn/lọc). */
 export interface ExportRecord {
@@ -15,6 +16,10 @@ export interface ExportRecord {
   sources: string[];
   originalUrl: string;
   queryKeywords: string[];
+  /** Thông tin truy cập mở (tùy chọn để tương thích với client cũ). */
+  oaUrl?: string;
+  oaPdfUrl?: string;
+  oaLicense?: string;
 }
 
 export const EXPORT_COLUMNS = [
@@ -30,6 +35,8 @@ export const EXPORT_COLUMNS = [
   'Source',
   'Original URL',
   'Search Keyword',
+  'Open Access URL',
+  'License',
 ] as const;
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -66,7 +73,14 @@ function rowValues(record: ExportRecord, index: number): (string | number)[] {
     sourceLabel(record),
     record.originalUrl,
     record.queryKeywords.join('; '),
+    openAccessUrl(record),
+    record.oaLicense ? formatLicense(record.oaLicense) : '',
   ];
+}
+
+/** Link đọc miễn phí: ưu tiên PDF trực tiếp, nếu không có thì trang toàn văn. Rỗng nếu bài không có bản mở. */
+function openAccessUrl(record: ExportRecord): string {
+  return record.oaPdfUrl || record.oaUrl || '';
 }
 
 // ---------- CSV ----------
@@ -118,6 +132,8 @@ export async function toXlsx(records: ExportRecord[], generatedAt: Date = new Da
     { header: EXPORT_COLUMNS[9], width: 18 },
     { header: EXPORT_COLUMNS[10], width: 40 },
     { header: EXPORT_COLUMNS[11], width: 30 },
+    { header: EXPORT_COLUMNS[12], width: 40 },
+    { header: EXPORT_COLUMNS[13], width: 14 },
   ];
 
   const header = sheet.getRow(1);
@@ -138,10 +154,12 @@ export async function toXlsx(records: ExportRecord[], generatedAt: Date = new Da
       cell.value = { text: record.doi, hyperlink: doiUrl(record.doi) };
       cell.font = LINK_FONT;
     }
-    if (/^https?:\/\//i.test(record.originalUrl) && record.originalUrl.length <= EXCEL_HYPERLINK_LIMIT) {
-      const cell = row.getCell(11);
-      cell.value = { text: record.originalUrl, hyperlink: record.originalUrl };
-      cell.font = LINK_FONT;
+    for (const [column, url] of [[11, record.originalUrl], [13, openAccessUrl(record)]] as const) {
+      if (/^https?:\/\//i.test(url) && url.length <= EXCEL_HYPERLINK_LIMIT) {
+        const cell = row.getCell(column);
+        cell.value = { text: url, hyperlink: url };
+        cell.font = LINK_FONT;
+      }
     }
   });
 

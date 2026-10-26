@@ -86,6 +86,29 @@ Ví dụ yêu cầu tìm kiếm:
 
 `maxResults` (20/50/100/200/500) áp dụng cho **mỗi từ khóa trên mỗi nguồn**; tối đa 10 từ khóa mỗi lần.
 
+## Truy cập miễn phí (Open Access)
+
+Mỗi bài có cột **Truy cập**:
+- **Miễn phí**: có ít nhất một nguồn xác nhận bài có bản đọc miễn phí hợp pháp (truy cập mở). Kèm giấy phép (vd. CC BY) nếu nguồn nêu, và nút **Tải PDF** (link PDF trực tiếp) hoặc **Đọc toàn văn** (trang chứa toàn văn).
+- **Chưa thấy bản miễn phí**: các nguồn chưa cho biết bài có bản mở. Nút **Trang nhà xuất bản** mở link DOI (hoặc URL gốc) để khách xem quyền truy cập hoặc giá. Nhãn này **không** khẳng định bài chắc chắn mất phí: bài có thể đọc được qua thư viện/trường học, hoặc nguồn chưa cập nhật bản mở.
+
+Bộ lọc **Truy cập** (Miễn phí / Chưa thấy bản miễn phí / Mọi truy cập) và ô thống kê “Có bản miễn phí” nằm ở phần kết quả. File xuất có thêm hai cột **Open Access URL** (ưu tiên PDF, nếu không thì trang đọc) và **License**.
+
+Nguồn dữ liệu truy cập mở:
+
+| Nguồn | Cách xác định |
+| --- | --- |
+| OpenAlex | `open_access.is_oa`, `best_oa_location` (link PDF, trang, giấy phép) |
+| Europe PMC | Cờ `isOpenAccess` và các link toàn văn đánh dấu `OA`/`F` (link `S` = cần đăng ký thì bỏ qua) |
+| DOAJ | Mọi bài là bản mở (DOAJ chỉ lập chỉ mục tạp chí truy cập mở); link toàn văn là trang bài báo |
+| arXiv | Mọi bài đọc miễn phí; PDF ở địa chỉ chuẩn của arXiv |
+| Semantic Scholar | `openAccessPdf` (chưa kiểm thử với API thật) |
+| Crossref | Không suy đoán; trạng thái được bổ sung khi bài cũng xuất hiện ở nguồn khác |
+
+Khi một bài có ở nhiều nguồn, chỉ cần một nguồn xác nhận là bản mở thì cả bài được gắn “Miễn phí”; URL và giấy phép chỉ lấy từ các bản ghi xác nhận là mở.
+
+**Hạn chế:** dữ liệu truy cập mở không hoàn hảo. Thử với dữ liệu thật (25–26/10/2026), khoảng 3/4 link PDF mở được đúng file PDF; số còn lại hỏng (404), lỗi kết nối hoặc dẫn tới trang HTML (có thể là trang đăng ký). Các nút luôn mở link gốc của nơi cung cấp (tab mới); **máy chủ PaperFinder không tải hay lưu trữ lại file PDF**. Ứng dụng không tích hợp các trang chia sẻ tài liệu vi phạm bản quyền (Sci-Hub, LibGen...).
+
 ## Trang quản trị (thống kê sử dụng)
 
 Đặt `ADMIN_PASSWORD` (tối thiểu 8 ký tự) trong `.env` rồi mở `/admin` (ví dụ http://localhost:5173/admin) để xem:
@@ -146,4 +169,4 @@ Mở rộng sau này: backend không có trạng thái và không có đăng nh�
 
 - CSV: UTF-8 có BOM (Excel đọc đúng tiếng Việt), dấu phân cách `,`. Ô văn bản bắt đầu bằng `= + - @` được thêm dấu nháy đơn phía trước để Excel không hiểu là công thức.
 - XLSX: chuỗi luôn được lưu là văn bản, DOI/URL là hyperlink, có hàng tiêu đề cố định, bộ lọc và sheet “Ghi chú”.
-- Cột: `STT, Title, DOI, Authors, Publication Year, Journal, Publisher, Document Type, Abstract, Source, Original URL, Search Keyword`. Tác giả, nguồn và từ khóa nhiều giá trị được nối bằng `; `.
+- Cột: `STT, Title, DOI, Authors, Publication Year, Journal, Publisher, Document Type, Abstract, Source, Original URL, Search Keyword, Open Access URL, License`. Tác giả, nguồn và từ khóa nhiều giá trị được nối bằng `; `.

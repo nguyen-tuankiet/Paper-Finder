@@ -1,6 +1,7 @@
 import type { Author, PaperRecord } from '../../../shared/types.js';
 import { doiUrl, normalizeDoi } from '../lib/doi.js';
 import { UpstreamError, toUpstreamError } from '../lib/errors.js';
+import { looksLikePdf, openAccess } from '../lib/oa.js';
 import type { HttpClient } from '../lib/http.js';
 import type { Limiter } from '../lib/limiter.js';
 import { abstractFromInvertedIndex, cleanText, safeHttpUrl } from '../lib/text.js';
@@ -15,6 +16,8 @@ const SELECT = [
   'primary_location',
   'type',
   'abstract_inverted_index',
+  'open_access',
+  'best_oa_location',
 ].join(',');
 
 const MAX_PER_PAGE = 100;
@@ -30,7 +33,22 @@ interface OpenAlexLocation {
   source?: { display_name?: string; host_organization_name?: string } | null;
 }
 
+interface OpenAlexOpenAccess {
+  is_oa?: boolean | null;
+  oa_status?: string | null;
+  oa_url?: string | null;
+}
+
+interface OpenAlexBestLocation {
+  is_oa?: boolean | null;
+  pdf_url?: string | null;
+  landing_page_url?: string | null;
+  license?: string | null;
+}
+
 interface OpenAlexWork {
+  open_access?: OpenAlexOpenAccess | null;
+  best_oa_location?: OpenAlexBestLocation | null;
   id?: string;
   doi?: string | null;
   display_name?: string | null;
@@ -69,6 +87,10 @@ export function mapOpenAlexWork(raw: unknown, keyword: string, retrievedAt: stri
   const type = typeof work.type === 'string' ? work.type : '';
   const workId = typeof work.id === 'string' ? work.id : '';
   const year = work.publication_year;
+  const oa = work.open_access ?? undefined;
+  const best = work.best_oa_location ?? undefined;
+  const isOpen = oa?.is_oa === true || best?.is_oa === true;
+  const oaUrl = safeHttpUrl(oa?.oa_url);
 
   return {
     id: '',
@@ -81,6 +103,14 @@ export function mapOpenAlexWork(raw: unknown, keyword: string, retrievedAt: stri
     documentType: type,
     isPreprint: type === 'preprint',
     abstract: abstractFromInvertedIndex(work.abstract_inverted_index),
+    ...openAccess({
+      isOpenAccess: isOpen,
+      oaStatus: oa?.oa_status ?? '',
+      // oa_url có thể là PDF hoặc trang landing; chỉ coi là PDF khi URL trông như PDF.
+      oaPdfUrl: safeHttpUrl(best?.pdf_url) || (looksLikePdf(oaUrl) ? oaUrl : ''),
+      oaUrl: safeHttpUrl(best?.landing_page_url) || oaUrl,
+      oaLicense: best?.license ?? '',
+    }),
     sources: ['openalex'],
     sourceRefs: workId ? [{ source: 'openalex', sourceId: workId, url: safeHttpUrl(workId) }] : [],
     originalUrl: safeHttpUrl(location?.landing_page_url) || (doi ? doiUrl(doi) : safeHttpUrl(workId)),
