@@ -22,7 +22,7 @@ createRoot(document.getElementById('root')!).render(
         },
         components: {
           Table: { headerBg: '#f3f5f8' },
-          Layout: { bodyBg: '#f3f5f9', footerBg: '#ffffff', footerPadding: '28px 16px 18px' },
+          Layout: { bodyBg: '#f3f5f9', footerBg: '#11335a', footerPadding: '36px 16px 20px' },
           Card: { headerFontSize: 15 },
         },
       }}

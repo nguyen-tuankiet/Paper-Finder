@@ -472,29 +472,197 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* ---------- Ứng dụng khác của tác giả ---------- */
-.pf-apps {
-  padding: 8px 16px 28px;
+/* ---------- Thẻ treo giới thiệu ứng dụng khác ---------- */
+.pf-hang {
+  position: fixed;
+  top: 54px;
+  right: 20px;
+  z-index: 60;
+  width: 124px;
 }
 
-.pf-apps-inner {
-  max-width: var(--pf-max);
-  margin: 0 auto;
+.pf-hang-rail {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  height: 18px;
+  padding: 0 24px 0 6px;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(16, 48, 78, 0.28);
 }
 
-.pf-app-card {
-  height: 100%;
+.pf-hang-nail {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #8a97a8;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+}
+
+.pf-hang-close {
+  position: absolute;
+  top: 50%;
+  right: 3px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #e9eef4;
+  color: #44536a;
+  font-size: 8px;
+  cursor: pointer;
+}
+.pf-hang-close:hover {
+  background: #d5deea;
+  color: #11335a;
+}
+
+.pf-hang-items {
+  display: flex;
+  justify-content: space-around;
+  padding: 0 6px;
+}
+
+.pf-hang-swing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transform-origin: 50% 0;
+  animation: pf-swing 3.4s ease-in-out infinite alternate;
+}
+.pf-hang-swing-1 {
+  animation-duration: 4.1s;
+  animation-delay: -1.3s;
+}
+.pf-hang-swing:hover,
+.pf-hang-swing:focus-visible,
+.pf-hang-items:hover .pf-hang-swing {
+  animation-play-state: paused;
+}
+
+.pf-hang-string {
+  width: 2px;
+  height: 20px;
+  background: #8a97a8;
+}
+
+.pf-hang-tag {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 2px solid var(--pf-primary, #1f4e79);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 5px 12px rgba(16, 48, 78, 0.25);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.pf-hang-tag img,
+.pf-hang-tag svg {
+  display: block;
+  border-radius: 50%;
+}
+.pf-hang-tag.is-active,
+.pf-hang-swing:hover .pf-hang-tag {
+  transform: scale(1.1);
+  box-shadow: 0 8px 18px rgba(16, 48, 78, 0.32);
+}
+
+.pf-hang-info {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 272px;
+  max-width: calc(100vw - 24px);
+  margin-top: 6px;
+  padding: 14px 16px;
   border: 1px solid var(--pf-border);
-  border-radius: var(--pf-radius);
-  box-shadow: var(--pf-shadow);
+  border-top: 3px solid var(--pf-primary, #1f4e79);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(16, 48, 78, 0.25);
+  color: var(--pf-text, #1f2d3d);
+  text-decoration: none;
+  animation: pf-pop 0.14s ease-out;
+}
+.pf-hang-info strong {
+  font-size: 15px;
+}
+.pf-hang-tagline {
+  font-size: 13px;
+  font-weight: 600;
+}
+.pf-hang-desc {
+  color: #5b6877;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.pf-hang-go {
+  margin-top: 6px;
+  color: var(--pf-primary, #1f4e79);
+  font-size: 13px;
+  font-weight: 600;
+}
+.pf-hang-info:hover .pf-hang-go {
+  text-decoration: underline;
+}
+
+@keyframes pf-swing {
+  from {
+    transform: rotate(-7deg);
+  }
+  to {
+    transform: rotate(7deg);
+  }
+}
+@keyframes pf-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .pf-hang {
+    right: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-hang-swing {
+    animation: none;
+  }
+  .pf-hang-info {
+    animation: none;
+  }
 }
 
 /* ---------- Chân trang ---------- */
-.pf-footer {
+.pf-footer.ant-layout-footer {
   flex: none;
-  padding: 28px 16px 18px;
-  background: #fff;
-  border-top: 1px solid var(--pf-border);
+  padding: 36px 16px 20px;
+  background: #11335a;
+  color: rgba(214, 232, 252, 0.86);
+  overflow-x: clip;
 }
 
 .pf-footer-inner {
@@ -502,13 +670,190 @@ body {
   margin: 0 auto;
 }
 
+.pf-footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pf-footer .pf-logo-sm {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.16);
+  font-size: 20px;
+}
+
+.pf-footer-name {
+  color: #fff;
+  font-size: 19px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.pf-footer-tagline {
+  color: rgba(214, 232, 252, 0.75);
+  font-size: 13px;
+}
+
+.pf-footer-desc {
+  max-width: 380px;
+  margin: 14px 0 16px;
+  line-height: 1.6;
+  font-size: 13.5px;
+  color: rgba(214, 232, 252, 0.82);
+}
+
+.pf-footer-social {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pf-footer-social a {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 16px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.pf-footer-social a:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #fff;
+}
+
+.pf-footer-title {
+  margin: 0 0 12px;
+  color: #fff;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
 .pf-footer-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin: 10px 0 0;
+  gap: 10px;
+  margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.pf-flink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgba(214, 232, 252, 0.88);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.pf-flink:hover {
+  color: #fff;
+}
+.pf-flink .anticon {
+  font-size: 12px;
+  color: #8fdcff;
+}
+
+.pf-tile {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.pf-footer-note {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  color: rgba(214, 232, 252, 0.82);
+}
+
+/* Khối "Theo dõi": kiểu dáng như ô nhập + nút gửi, nhưng là liên kết thật tới GitHub */
+.pf-follow {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  max-width: 300px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  font-size: 13.5px;
+  text-decoration: none;
+}
+.pf-follow:hover {
+  border-color: rgba(255, 255, 255, 0.45);
+  color: #fff;
+}
+.pf-follow > span:first-child {
+  padding: 10px 14px;
+}
+.pf-follow-go {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #11335a;
+}
+
+.pf-footer-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 13px;
+  color: rgba(214, 232, 252, 0.78);
+}
+.pf-footer-bottom a {
+  color: #fff;
+}
+.pf-footer-bottom a:hover {
+  color: #8fdcff;
+}
+
+.pf-footer-slogan {
+  font-family: 'Segoe Script', 'Lucida Handwriting', 'Brush Script MT', cursive;
+  font-style: italic;
+  font-size: 14px;
+  color: rgba(214, 232, 252, 0.9);
+}
+.pf-footer-slogan .anticon {
+  margin: 0 4px;
+  font-size: 11px;
+  color: #8fdcff;
+}
+
+/* Hộp thoại nội dung của chân trang */
+.pf-info-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pf-info-text h5.ant-typography {
+  margin: 14px 0 4px;
 }
 
 /* Tablet: thu nhỏ hình minh họa và khoảng cách */

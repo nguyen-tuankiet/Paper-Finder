@@ -1,71 +1,127 @@
-import { FileTextOutlined, GithubOutlined } from '@ant-design/icons';
-import { Col, Divider, Flex, Layout, Row, Typography } from 'antd';
-import { AUTHOR, DATA_SOURCE_LINKS } from '../lib/author';
+import { ArrowRightOutlined, FileTextOutlined, GithubOutlined, LinkedinOutlined, MailOutlined, TwitterOutlined, YoutubeOutlined } from '@ant-design/icons';
+import { Col, Layout, Row } from 'antd';
+import { useState, type ReactNode } from 'react';
+import { AUTHOR, DATA_SOURCE_LINKS, FOOTER } from '../lib/author';
+import { InfoModal, type InfoKind } from './InfoModals';
 
 const external = { target: '_blank', rel: 'noopener noreferrer' } as const;
 
-/** Chân trang: giới thiệu, nguồn dữ liệu, tác giả (liên kết GitHub). */
+interface Social {
+  key: string;
+  label: string;
+  href: string;
+  icon: ReactNode;
+}
+
+/** Chỉ hiện icon có liên kết thật (xem AUTHOR.socials trong lib/author.ts). */
+function socialLinks(): Social[] {
+  const s = AUTHOR.socials;
+  const all: Social[] = [
+    { key: 'github', label: 'GitHub', href: AUTHOR.github, icon: <GithubOutlined /> },
+    { key: 'youtube', label: 'YouTube', href: s.youtube, icon: <YoutubeOutlined /> },
+    { key: 'linkedin', label: 'LinkedIn', href: s.linkedin, icon: <LinkedinOutlined /> },
+    { key: 'x', label: 'X', href: s.x, icon: <TwitterOutlined /> },
+    { key: 'email', label: 'Email', href: s.email, icon: <MailOutlined /> },
+  ];
+  return all.filter((x) => x.href);
+}
+
+/** Chân trang nền navy: thương hiệu, nguồn dữ liệu, liên kết nhanh, theo dõi tác giả. */
 export function AppFooter() {
+  const [info, setInfo] = useState<InfoKind | null>(null);
+  const quick: { label: string; onClick?: () => void; href?: string }[] = [
+    { label: 'Hướng dẫn sử dụng', onClick: () => setInfo('guide') },
+    { label: 'Câu hỏi thường gặp', onClick: () => setInfo('faq') },
+    { label: 'Liên hệ', href: AUTHOR.github },
+    { label: 'Chính sách bảo mật', onClick: () => setInfo('privacy') },
+  ];
+
   return (
     <Layout.Footer className="pf-footer">
       <div className="pf-footer-inner">
-        <Row gutter={[32, 24]}>
-          <Col xs={24} md={10}>
-            <Flex align="center" gap={10} style={{ marginBottom: 8 }}>
+        <Row gutter={[32, 28]}>
+          <Col xs={24} md={9}>
+            <div className="pf-footer-brand">
               <span className="pf-logo pf-logo-sm" aria-hidden="true">
                 <FileTextOutlined style={{ color: '#fff' }} />
               </span>
-              <Typography.Text strong style={{ fontSize: 16 }}>
-                PaperFinder
-              </Typography.Text>
-            </Flex>
-            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              Công cụ tìm kiếm và quản lý tài liệu khoa học dành cho sinh viên, giảng viên và người làm nghiên cứu. Dữ liệu là metadata công khai, không bao phủ toàn bộ tài liệu khoa học trên thế giới.
-            </Typography.Paragraph>
+              <div>
+                <div className="pf-footer-name">PaperFinder</div>
+                <div className="pf-footer-tagline">{FOOTER.tagline}</div>
+              </div>
+            </div>
+            <p className="pf-footer-desc">{FOOTER.description}</p>
+            <div className="pf-footer-social">
+              {socialLinks().map((s) => (
+                <a key={s.key} href={s.href} aria-label={s.label} title={s.label} {...external}>
+                  {s.icon}
+                </a>
+              ))}
+            </div>
           </Col>
 
-          <Col xs={12} md={7}>
-            <Typography.Text strong>Nguồn dữ liệu</Typography.Text>
+          <Col xs={12} md={5}>
+            <h3 className="pf-footer-title">Nguồn dữ liệu</h3>
             <ul className="pf-footer-list">
               {DATA_SOURCE_LINKS.map((s) => (
                 <li key={s.name}>
-                  <Typography.Link href={s.url} {...external}>
+                  <a className="pf-flink" href={s.url} {...external}>
+                    <span className="pf-tile" style={{ background: s.color }} aria-hidden="true">
+                      {s.letter}
+                    </span>
                     {s.name}
-                  </Typography.Link>
+                  </a>
                 </li>
               ))}
             </ul>
           </Col>
 
-          <Col xs={12} md={7}>
-            <Typography.Text strong>Tác giả</Typography.Text>
+          <Col xs={12} md={5}>
+            <h3 className="pf-footer-title">Liên kết nhanh</h3>
             <ul className="pf-footer-list">
-              <li>
-                <Typography.Link href={AUTHOR.github} {...external}>
-                  <GithubOutlined /> {AUTHOR.name}
-                </Typography.Link>
-              </li>
-              <li>
-                <Typography.Text type="secondary">Xem các dự án trên GitHub</Typography.Text>
-              </li>
+              {quick.map((q) => (
+                <li key={q.label}>
+                  {q.href ? (
+                    <a className="pf-flink" href={q.href} {...external}>
+                      <ArrowRightOutlined /> {q.label}
+                    </a>
+                  ) : (
+                    <button type="button" className="pf-flink" onClick={q.onClick}>
+                      <ArrowRightOutlined /> {q.label}
+                    </button>
+                  )}
+                </li>
+              ))}
             </ul>
+          </Col>
+
+          <Col xs={24} md={5}>
+            <h3 className="pf-footer-title">Theo dõi chúng tôi</h3>
+            <p className="pf-footer-note">Cập nhật tính năng mới và các dự án khác của tác giả.</p>
+            <a className="pf-follow" href={AUTHOR.github} {...external}>
+              <span>
+                <GithubOutlined /> Theo dõi trên GitHub
+              </span>
+              <span className="pf-follow-go">
+                <ArrowRightOutlined />
+              </span>
+            </a>
           </Col>
         </Row>
 
-        <Divider style={{ margin: '20px 0 14px' }} />
-
-        <Flex justify="space-between" align="center" wrap gap={8}>
-          <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-            © {new Date().getFullYear()} PaperFinder · Phát triển bởi{' '}
-            <Typography.Link href={AUTHOR.github} {...external}>
+        <div className="pf-footer-bottom">
+          <span>
+            © {new Date().getFullYear()} PaperFinder. Phát triển bởi{' '}
+            <a href={AUTHOR.github} {...external}>
               {AUTHOR.name}
-            </Typography.Link>
-          </Typography.Text>
-          <Typography.Text type="secondary" style={{ fontSize: 12.5 }}>
-            Hãy đối chiếu thông tin với bài gốc trước khi sử dụng trong nghiên cứu.
-          </Typography.Text>
-        </Flex>
+            </a>
+          </span>
+          <span className="pf-footer-slogan" aria-hidden="true">
+            {FOOTER.slogan[0]} <ArrowRightOutlined /> {FOOTER.slogan[1]}
+          </span>
+        </div>
       </div>
+      <InfoModal kind={info} onClose={() => setInfo(null)} />
     </Layout.Footer>
   );
 }

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import type { PaperRecord, SearchRequest, SearchResult } from '../../shared/types';
 import { AppFooter } from './components/AppFooter';
 import { DetailDrawer } from './components/DetailDrawer';
-import { OtherApps } from './components/OtherApps';
+import { FloatingApps } from './components/FloatingApps';
 import { DuplicatesModal, type DuplicateAction } from './components/DuplicatesModal';
 import { ExportPanel } from './components/ExportPanel';
 import { Header } from './components/Header';
@@ -110,8 +110,8 @@ export default function App() {
         <EmptyState phase={search.phase} error={search.error} hasResult={search.result !== null} onRetry={lastRequest ? () => run(lastRequest) : undefined} />
         {search.result && search.phase === 'done' && <ResultsView key={search.result.finishedAt} result={search.result} online={online} />}
       </Layout.Content>
-      <OtherApps />
       <AppFooter />
+      <FloatingApps />
       <FloatButton.BackTop visibilityHeight={600} tooltip="Lên đầu trang" />
     </Layout>
   );

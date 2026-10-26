@@ -4,7 +4,7 @@ Tìm kiếm và quản lý tài liệu khoa học: nhập từ khóa → lấy b
 
 ## Giao diện
 
-Giao diện dùng Ant Design 6: `Layout` (đầu trang có hero, nội dung, chân trang), `Card` cho các khung nội dung (`web/src/components/Panel.tsx`), `Statistic` cho lưới thống kê, nút "lên đầu trang". Tên tác giả, liên kết GitHub, danh sách "Ứng dụng khác của tác giả" và các liên kết nguồn dữ liệu ở chân trang nằm trong **một file dễ sửa: `web/src/lib/author.ts`**. Các liên kết ngoài đều mở ở tab mới với `rel="noopener noreferrer"`.
+Giao diện dùng Ant Design 6: `Layout` (đầu trang có hero, nội dung, chân trang), `Card` cho các khung nội dung (`web/src/components/Panel.tsx`), `Statistic` cho lưới thống kê, nút "lên đầu trang". Chân trang nền navy gồm bốn cột (thương hiệu, nguồn dữ liệu, liên kết nhanh, theo dõi tác giả); "Hướng dẫn sử dụng", "Câu hỏi thường gặp" và "Chính sách bảo mật" mở hộp thoại có nội dung thật (`web/src/components/InfoModals.tsx`). Ở góc trên bên phải có hai thẻ tròn treo lắc nhẹ giới thiệu ứng dụng khác của tác giả (`FloatingApps.tsx`): rê chuột (hoặc chạm trên điện thoại) để xem giới thiệu và bấm để mở; nút × để tắt (nhớ trong phiên làm việc). Tên tác giả, liên kết GitHub, mạng xã hội (icon chỉ hiện khi có URL trong `AUTHOR.socials`), danh sách ứng dụng khác và các liên kết nguồn dữ liệu nằm trong **một file dễ sửa: `web/src/lib/author.ts`**; logo Cocoflow ở `web/public/apps/`. Các liên kết ngoài đều mở ở tab mới với `rel="noopener noreferrer"`.
 
 ## Nguồn dữ liệu
 
