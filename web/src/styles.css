@@ -548,15 +548,20 @@ body {
   text-decoration: underline;
 }
 
-/* Nút tròn ở mép phải màn hình sau khi popup đã đóng */
+/* Nút "lên đầu trang" của antd nằm ngay trên nút tròn bên dưới, cùng trục dọc */
+.pf-backtop.ant-float-btn {
+  inset-inline-end: 22px;
+  inset-block-end: 90px;
+}
+
+/* Nút tròn ở góc dưới bên phải sau khi popup đã đóng */
 .pf-promo-fab {
   position: fixed;
-  top: 50%;
   right: 14px;
+  bottom: 22px;
   z-index: 50;
   width: 56px;
   height: 56px;
-  margin-top: -28px;
   padding: 0;
   border: 2px solid var(--pf-primary);
   border-radius: 50%;
@@ -603,9 +608,13 @@ body {
 @media (max-width: 560px) {
   .pf-promo-fab {
     right: 8px;
+    bottom: 16px;
     width: 48px;
     height: 48px;
-    margin-top: -24px;
+  }
+  .pf-backtop.ant-float-btn {
+    inset-inline-end: 12px !important;
+    inset-block-end: 72px !important;
   }
   .pf-promo-fab-logo {
     width: 22px;

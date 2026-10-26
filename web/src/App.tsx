@@ -112,7 +112,7 @@ export default function App() {
       </Layout.Content>
       <AppFooter />
       <ProductPopup />
-      <FloatButton.BackTop visibilityHeight={600} tooltip="Lên đầu trang" />
+      <FloatButton.BackTop className="pf-backtop" visibilityHeight={600} tooltip="Lên đầu trang" />
     </Layout>
   );
 }
