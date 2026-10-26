@@ -10,7 +10,7 @@ import { SearchForm } from './components/SearchForm';
 import { EmptyState, NoResults, SearchProgress, SourceAlerts } from './components/SearchStatus';
 import { StatsBar } from './components/StatsBar';
 import { useOnlineStatus, useSearch, useSourceHealth } from './lib/hooks';
-import { useCitationStyle } from './lib/citationStyle';
+import { useCitationStyle, useCustomCitation } from './lib/citationStyle';
 import { DEFAULT_FILTERS, DEFAULT_SOURCES, filterRecords, type ResultFilters } from './lib/records';
 
 const pairKey = (ids: readonly [string, string]) => ids.join('|');
@@ -18,6 +18,7 @@ const pairKey = (ids: readonly [string, string]) => ids.join('|');
 /** Toàn bộ trạng thái thao tác trên một kết quả (lọc, chọn, xử lý nghi trùng); được tạo mới cho mỗi lần tìm. */
 function ResultsView({ result, online }: { result: SearchResult; online: boolean }) {
   const [citationStyle, setCitationStyle] = useCitationStyle();
+  const [customCitation, setCustomCitation] = useCustomCitation();
   const [filters, setFilters] = useState<ResultFilters>(DEFAULT_FILTERS);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
@@ -69,13 +70,15 @@ function ResultsView({ result, online }: { result: SearchResult; online: boolean
             onShowDetail={setDetail}
             citationStyle={citationStyle}
             onCitationStyleChange={setCitationStyle}
+            customCitation={customCitation}
+            onCustomCitationChange={setCustomCitation}
           />
           <Typography.Paragraph type="secondary" className="pf-disclaimer">
             Dữ liệu là metadata công khai từ Crossref và OpenAlex, không phải toàn bộ tài liệu khoa học trên thế giới. Abstract, tác giả hoặc tạp chí có thể thiếu tùy bản ghi. Bài preprint chưa chắc đã qua bình duyệt.
           </Typography.Paragraph>
         </>
       )}
-      <DetailDrawer record={detail} citationStyle={citationStyle} onClose={() => setDetail(null)} />
+      <DetailDrawer record={detail} citationStyle={citationStyle} customCitation={customCitation} onClose={() => setDetail(null)} />
       <DuplicatesModal open={dupOpen} pairs={pendingPairs} byId={byId} onClose={() => setDupOpen(false)} onResolve={resolve} />
     </>
   );

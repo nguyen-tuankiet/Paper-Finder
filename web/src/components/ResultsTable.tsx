@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 import { SOURCE_IDS, type PaperRecord } from '../../../shared/types';
 import { copyText } from '../lib/clipboard';
 import { formatReferenceList, type CitationStyle } from '../lib/citation';
+import type { CustomCitationConfig } from '../lib/customCitation';
 import { CitationPanel } from './CitationPanel';
 import { PdfButton } from './PdfButton';
 import {
@@ -30,6 +31,8 @@ interface Props {
   onShowDetail: (record: PaperRecord) => void;
   citationStyle: CitationStyle;
   onCitationStyleChange: (style: CitationStyle) => void;
+  customCitation: CustomCitationConfig;
+  onCustomCitationChange: (config: CustomCitationConfig) => void;
 }
 
 const muted = (text: string) => <Typography.Text type="secondary">{text}</Typography.Text>;
@@ -75,7 +78,7 @@ export function AccessCell({ record }: { record: PaperRecord }) {
   );
 }
 
-export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, selectedIds, onSelectionChange, onShowDetail, citationStyle, onCitationStyleChange }: Props) {
+export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, selectedIds, onSelectionChange, onShowDetail, citationStyle, onCitationStyleChange, customCitation, onCustomCitationChange }: Props) {
   const [yearOrder, setYearOrder] = useState<'ascend' | 'descend' | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -96,7 +99,7 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
   const referenceTargets = selectedRecords.length > 0 ? selectedRecords : filtered;
 
   const copyReferences = async (records: PaperRecord[]) => {
-    const text = formatReferenceList(sortByYear(records, yearOrder), { style: citationStyle, includeDoi });
+    const text = formatReferenceList(sortByYear(records, yearOrder), { style: citationStyle, includeDoi, custom: customCitation });
     if (await copyText(text)) void messageApi.success(records.length === 1 ? 'Đã sao chép tài liệu tham khảo.' : `Đã sao chép ${records.length} tài liệu tham khảo.`);
     else void messageApi.error('Không sao chép được. Hãy mở Chi tiết và sao chép thủ công.');
   };
@@ -324,6 +327,8 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
         onStyleChange={onCitationStyleChange}
         includeDoi={includeDoi}
         onIncludeDoiChange={setIncludeDoi}
+        custom={customCitation}
+        onCustomChange={onCustomCitationChange}
         targets={referenceTargets}
         fromSelection={selectedRecords.length > 0}
         onCopy={() => void copyReferences(referenceTargets)}

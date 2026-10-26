@@ -117,13 +117,16 @@ Khi một bài có ở nhiều nguồn, chỉ cần một nguồn xác nhận l�
 
 ## Sao chép tài liệu tham khảo
 
-Nút **Trích dẫn** (mỗi bài) và khung **Sao chép tài liệu tham khảo** phía trên bảng gồm 2 bước: (1) chọn kiểu ghi, có ví dụ xem trước; (2) bấm sao chép các bài đã tick chọn, hoặc toàn bộ kết quả đang lọc nếu chưa chọn bài nào. Mục *Tài liệu tham khảo* trong ngăn Chi tiết dùng cùng kiểu đã chọn (kiểu được nhớ lại ở lần mở sau):
+Nút **Trích dẫn** (mỗi bài) và dòng **Tài liệu tham khảo** phía trên bảng: chọn kiểu ghi rồi bấm sao chép các bài đã tick chọn (hoặc toàn bộ kết quả đang lọc nếu chưa chọn bài nào). Dòng này **mặc định thu gọn** (một dòng); bấm *Xem trước & tùy chọn* để xem ví dụ, bật Kèm DOI hoặc soạn mẫu riêng. Mục *Tài liệu tham khảo* trong ngăn Chi tiết dùng cùng kiểu đã chọn. Kiểu, mẫu tự soạn và trạng thái mở/thu gọn được nhớ lại ở lần mở sau (chỉ trong trình duyệt của người dùng):
 
 | Kiểu | Bài tạp chí | Danh sách |
 | --- | --- | --- |
 | **IEEE** (mặc định) | `A. A. Author, “Title,” Journal Name, vol. x, no. x, pp. xx–xx, year, doi: DOI.` | đánh số [1], [2]... theo thứ tự đang hiển thị |
 | **APA 7** | `Author, A. A. (Year). Title. Journal Name, volume(issue), pages. https://doi.org/xxx` | không đánh số, sắp xếp theo tên tác giả |
 | **Mẫu cơ bản** | `Kumar S, Title, Journal (7), no. 2, 1987, pp. 313 - 325.` (tùy chọn Kèm DOI) | đánh số [1], [2]... |
+| **Tùy chỉnh** | do bạn soạn (xem bên dưới) | theo mẫu và thứ tự bạn chọn |
+
+**Kiểu Tùy chỉnh — tự soạn mẫu:** viết mẫu bằng các trường trong dấu `{ }`: `{authors}`, `{first_author}`, `{title}`, `{journal}`, `{volume}`, `{issue}`, `{volume_issue}`, `{pages}` (313-325), `{pages_en}` (313–325), `{first_page}`, `{last_page}`, `{year}`, `{doi}`, `{doi_url}`, `{url}`, `{publisher}`, `{place}`, `{type}`, `{retrieved}`, `{index}` (số thứ tự). Bấm các nút chèn trường thay vì gõ tay. Phần đặt trong **`[[ ]]` là nhóm tùy chọn**: nếu bài không có dữ liệu của bất kỳ trường nào bên trong thì cả nhóm biến mất, nên không bịa dữ liệu và không để lại dấu câu thừa. Ví dụ `{authors}, {title}, {journal}[[, tập {volume}]][[, {year}]].`. Ký tự khác (kể cả `[ ]` đơn như `[{index}]`) giữ nguyên. Còn chọn được: cách ghi tên tác giả (Kumar S / S. Kumar / Kumar, S. / như nguồn), cách nối (`,` / `and` / `&` / `;`), số tác giả tối đa rồi "et al.", và thứ tự (theo bảng hoặc A–Z). Có 5 mẫu có sẵn để sửa tiếp, trong đó "Giống IEEE" và "Giống APA 7" cho kết quả trùng khớp hai kiểu chính thức với bài tạp chí đủ dữ liệu. Tên trường gõ sai được cảnh báo ngay.
 
 Hỗ trợ các loại: bài tạp chí, hội nghị, sách, chương sách, luận văn, báo cáo (mỗi kiểu có mẫu riêng cho từng loại, đã được đối chiếu bằng test với các mẫu IEEE/APA 7 của dự án). Ngăn Chi tiết của APA còn có **trích dẫn trong văn bản** (Nguyen & Tran, 2025). Với IEEE, trong văn bản dùng số thứ tự [n] theo danh sách.
 
