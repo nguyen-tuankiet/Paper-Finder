@@ -327,7 +327,6 @@ body {
   min-width: 0;
   padding: 12px 14px;
   border: 1px solid var(--pf-border);
-  border-left: 3px solid var(--tone);
   border-radius: 10px;
   background: #fafbfd;
 }
