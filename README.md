@@ -117,12 +117,17 @@ Khi một bài có ở nhiều nguồn, chỉ cần một nguồn xác nhận l�
 
 ## Sao chép tài liệu tham khảo
 
-Nút **Trích dẫn** (mỗi bài), **Sao chép trích dẫn (n)** (các bài đã chọn, hoặc toàn bộ kết quả đang lọc nếu chưa chọn; đánh số [1], [2]...) và mục *Tài liệu tham khảo* trong ngăn Chi tiết. Tùy chọn **Kèm DOI**. Ghi theo quy ước:
-- Bài tạp chí: `Tác giả, Tên bài báo, Tên tạp chí (tập), no. số, năm, pp. trang.` Ví dụ: `Kumar S, Superconvergence of a ..., IMA Journal of Numerical Analysis (7), 1987, pp. 313 - 325.`
-- Hội nghị: `Tác giả, Tên bài báo, Tên hội nghị, nơi và thời gian tổ chức.`
-- Sách: `Tác giả, Tên sách, Nhà xuất bản, Nơi xuất bản, Năm.` (chương sách thêm `in <tên sách>`).
+Nút **Trích dẫn** (mỗi bài), **Sao chép trích dẫn (n)** (các bài đã chọn, hoặc toàn bộ kết quả đang lọc nếu chưa chọn) và mục *Tài liệu tham khảo* trong ngăn Chi tiết. Chọn kiểu ở thanh phía trên bảng (được nhớ lại ở lần mở sau):
 
-Tác giả ghi dạng `Họ + chữ cái đầu của tên` (ví dụ `Nguyễn VA`), tối đa 6 tác giả rồi `et al.`. **Phần nào nguồn không có thì bị bỏ qua, không bịa**; tập/số/trang/nơi lấy từ Crossref, OpenAlex, Europe PMC, DOAJ, Semantic Scholar nên có bài thiếu. Họ tên Việt Nam trong dữ liệu không tách họ/tên được nhận dạng theo họ phổ biến nên có thể sai ở vài trường hợp. Hãy đối chiếu với bài gốc trước khi dùng.
+| Kiểu | Bài tạp chí | Danh sách |
+| --- | --- | --- |
+| **IEEE** (mặc định) | `A. A. Author, “Title,” Journal Name, vol. x, no. x, pp. xx–xx, year, doi: DOI.` | đánh số [1], [2]... theo thứ tự đang hiển thị |
+| **APA 7** | `Author, A. A. (Year). Title. Journal Name, volume(issue), pages. https://doi.org/xxx` | không đánh số, sắp xếp theo tên tác giả |
+| **Mẫu cơ bản** | `Kumar S, Title, Journal (7), no. 2, 1987, pp. 313 - 325.` (tùy chọn Kèm DOI) | đánh số [1], [2]... |
+
+Hỗ trợ các loại: bài tạp chí, hội nghị, sách, chương sách, luận văn, báo cáo (mỗi kiểu có mẫu riêng cho từng loại, đã được đối chiếu bằng test với các mẫu IEEE/APA 7 của dự án). Ngăn Chi tiết của APA còn có **trích dẫn trong văn bản** (Nguyen & Tran, 2025). Với IEEE, trong văn bản dùng số thứ tự [n] theo danh sách.
+
+**Không hỗ trợ:** website (ứng dụng chỉ tìm tài liệu học thuật). **Phần nào nguồn không có thì bị bỏ qua, không bịa:** biên tập viên của chương sách, lần xuất bản của sách, số báo cáo, bậc học và nơi của luận văn đều không có trong dữ liệu nên không xuất hiện (luận văn ghi chung là "thesis"). Tên tạp chí/sách không in nghiêng được ở dạng văn bản thuần; tiêu đề giữ nguyên chữ hoa/thường của nguồn (APA yêu cầu viết hoa kiểu câu, chưa tự chuyển đổi). Tên tác giả theo thứ tự họ phổ biến cho tên Việt Nam khi nguồn không tách họ/tên nên có thể sai ở vài trường hợp. Hãy đối chiếu với bài gốc trước khi dùng.
 
 ## Trang quản trị (thống kê sử dụng)
 

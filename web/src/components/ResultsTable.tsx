@@ -1,11 +1,11 @@
 import { BookOutlined, CopyOutlined, EyeOutlined, LinkOutlined, ReadOutlined } from '@ant-design/icons';
-import { Button, Checkbox, Input, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd';
+import { Button, Checkbox, Input, Segmented, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import type { SorterResult } from 'antd/es/table/interface';
 import { useMemo, useState } from 'react';
 import { SOURCE_IDS, type PaperRecord } from '../../../shared/types';
 import { copyText } from '../lib/clipboard';
-import { formatReferenceList } from '../lib/citation';
+import { CITATION_STYLE_LABELS, formatReferenceList, type CitationStyle } from '../lib/citation';
 import { PdfButton } from './PdfButton';
 import {
   NO_DATA,
@@ -27,6 +27,8 @@ interface Props {
   selectedIds: Set<string>;
   onSelectionChange: (ids: Set<string>) => void;
   onShowDetail: (record: PaperRecord) => void;
+  citationStyle: CitationStyle;
+  onCitationStyleChange: (style: CitationStyle) => void;
 }
 
 const muted = (text: string) => <Typography.Text type="secondary">{text}</Typography.Text>;
@@ -72,7 +74,7 @@ export function AccessCell({ record }: { record: PaperRecord }) {
   );
 }
 
-export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, selectedIds, onSelectionChange, onShowDetail }: Props) {
+export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, selectedIds, onSelectionChange, onShowDetail, citationStyle, onCitationStyleChange }: Props) {
   const [yearOrder, setYearOrder] = useState<'ascend' | 'descend' | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -93,7 +95,7 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
   const referenceTargets = selectedRecords.length > 0 ? selectedRecords : filtered;
 
   const copyReferences = async (records: PaperRecord[]) => {
-    const text = formatReferenceList(sortByYear(records, yearOrder), { includeDoi });
+    const text = formatReferenceList(sortByYear(records, yearOrder), { style: citationStyle, includeDoi });
     if (await copyText(text)) void messageApi.success(records.length === 1 ? 'Đã sao chép tài liệu tham khảo.' : `Đã sao chép ${records.length} tài liệu tham khảo.`);
     else void messageApi.error('Không sao chép được. Hãy mở Chi tiết và sao chép thủ công.');
   };
@@ -307,10 +309,19 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
           Hiển thị <b>{filtered.length}</b>/{allRecords.length} bài · Đã chọn <b>{selectedIds.size}</b>
         </Typography.Text>
         <Space size="small" wrap>
-          <Checkbox checked={includeDoi} onChange={(e) => setIncludeDoi(e.target.checked)}>
-            Kèm DOI
-          </Checkbox>
-          <Tooltip title="Ghi theo quy ước: Tác giả, Tên bài, Tạp chí (tập), số, năm, trang. Có bài được chọn thì sao chép các bài đó, chưa chọn thì sao chép toàn bộ kết quả đang lọc.">
+          <Segmented
+            size="small"
+            value={citationStyle}
+            onChange={(v) => onCitationStyleChange(v as CitationStyle)}
+            options={(Object.keys(CITATION_STYLE_LABELS) as CitationStyle[]).map((value) => ({ value, label: CITATION_STYLE_LABELS[value] }))}
+            aria-label="Kiểu trích dẫn"
+          />
+          {citationStyle === 'basic' && (
+            <Checkbox checked={includeDoi} onChange={(e) => setIncludeDoi(e.target.checked)}>
+              Kèm DOI
+            </Checkbox>
+          )}
+          <Tooltip title="IEEE: danh sách đánh số [1], [2]...; APA 7: sắp xếp theo tên tác giả; Mẫu cơ bản: Tác giả, Tên bài, Tạp chí (tập), số, năm, trang. Có bài được chọn thì sao chép các bài đó, chưa chọn thì sao chép toàn bộ kết quả đang lọc.">
             <Button size="small" type="primary" ghost icon={<BookOutlined />} disabled={referenceTargets.length === 0} onClick={() => void copyReferences(referenceTargets)}>
               Sao chép trích dẫn ({referenceTargets.length})
             </Button>

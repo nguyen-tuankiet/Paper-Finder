@@ -2,13 +2,13 @@ import { BookOutlined, CopyOutlined } from '@ant-design/icons';
 import { Button, Descriptions, Drawer, Space, Tag, Typography, message } from 'antd';
 import type { PaperRecord } from '../../../shared/types';
 import { copyText } from '../lib/clipboard';
-import { formatReference } from '../lib/citation';
+import { CITATION_STYLE_LABELS, formatApaInText, formatReference, type CitationStyle } from '../lib/citation';
 import { PdfButton } from './PdfButton';
 import { NO_DATA, SOURCE_LABELS, docTypeLabel, doiUrl, formatLicense, publisherUrl } from '../lib/records';
 
 const muted = (text: string) => <Typography.Text type="secondary">{text}</Typography.Text>;
 
-export function DetailDrawer({ record, onClose }: { record: PaperRecord | null; onClose: () => void }) {
+export function DetailDrawer({ record, citationStyle, onClose }: { record: PaperRecord | null; citationStyle: CitationStyle; onClose: () => void }) {
   const [messageApi, contextHolder] = message.useMessage();
 
   const copy = async (text: string, label: string) => {
@@ -135,17 +135,28 @@ export function DetailDrawer({ record, onClose }: { record: PaperRecord | null; 
           </Descriptions>
           <div>
             <Space style={{ justifyContent: 'space-between', width: '100%' }} wrap>
-              <Typography.Text strong>Tài liệu tham khảo</Typography.Text>
-              <Button size="small" icon={<BookOutlined />} onClick={() => void copy(formatReference(record), 'tài liệu tham khảo')}>
+              <Typography.Text strong>Tài liệu tham khảo ({CITATION_STYLE_LABELS[citationStyle]})</Typography.Text>
+              <Button size="small" icon={<BookOutlined />} onClick={() => void copy(formatReference(record, { style: citationStyle }), 'tài liệu tham khảo')}>
                 Sao chép
               </Button>
             </Space>
             <Typography.Paragraph style={{ marginTop: 8, background: '#f4f6f9', padding: 10, borderRadius: 6, userSelect: 'all' }}>
-              {formatReference(record)}
+              {formatReference(record, { style: citationStyle })}
             </Typography.Paragraph>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              Ghi theo quy ước (tác giả, tên bài, tạp chí, tập, số, năm, trang). Phần nào nguồn không có sẽ bị bỏ qua; hãy đối chiếu với bài gốc trước khi dùng.
-            </Typography.Text>
+            {citationStyle === 'apa' && (
+              <Space style={{ marginBottom: 6 }} wrap>
+                <Typography.Text type="secondary">Trích dẫn trong văn bản:</Typography.Text>
+                <Typography.Text code>{formatApaInText(record)}</Typography.Text>
+                <Button size="small" onClick={() => void copy(formatApaInText(record), 'trích dẫn trong văn bản')}>
+                  Sao chép
+                </Button>
+              </Space>
+            )}
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                Đổi kiểu (IEEE, APA 7, Mẫu cơ bản) ở thanh phía trên bảng kết quả. Phần nào nguồn không có (tập, số, trang, biên tập viên, lần xuất bản...) sẽ bị bỏ qua; tên tạp chí/sách không in nghiêng được ở dạng văn bản thuần; hãy đối chiếu với bài gốc trước khi dùng.
+              </Typography.Text>
+            </div>
           </div>
           <div>
             <Typography.Text strong>Abstract</Typography.Text>
