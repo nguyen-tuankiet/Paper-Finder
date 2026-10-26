@@ -78,6 +78,9 @@ export function mergeRecords(members: PaperRecord[]): PaperRecord {
       base.isPreprint = other.isPreprint;
     }
     if (!base.originalUrl) base.originalUrl = other.originalUrl;
+    for (const field of ['volume', 'issue', 'pages', 'place'] as const) {
+      if (!base[field] && other[field]) base[field] = other[field];
+    }
     if (other.abstract.length > base.abstract.length) base.abstract = other.abstract;
   }
 

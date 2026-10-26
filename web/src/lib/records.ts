@@ -120,6 +120,20 @@ export function localDateStamp(date: Date = new Date()): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+/** Tên file PDF tải về: theo tiêu đề bài (bỏ ký tự cấm trong tên file), tối đa 120 ký tự. */
+export function pdfFileName(record: Pick<PaperRecord, 'title' | 'doi'>): string {
+  const base = (record.title || record.doi || 'paper')
+    .normalize('NFC')
+    .replace(/[\\/:*?"<>|\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\.pdf$/i, '')
+    .replace(/^\.+/, '')
+    .slice(0, 120)
+    .trim();
+  return `${base || 'paper'}.pdf`;
+}
+
 export function exportFileName(format: ExportFormat, date: Date = new Date()): string {
   return `paperfinder_results_${localDateStamp(date)}.${format}`;
 }

@@ -2,6 +2,7 @@ import type { Author, PaperRecord } from '../../../shared/types.js';
 import { normalizeDoi, doiUrl } from '../lib/doi.js';
 import { UpstreamError, toUpstreamError } from '../lib/errors.js';
 import { openAccess } from '../lib/oa.js';
+import { biblio, formatEventDates } from '../lib/biblio.js';
 import type { HttpClient } from '../lib/http.js';
 import type { Limiter } from '../lib/limiter.js';
 import { cleanAbstract, cleanText, safeHttpUrl } from '../lib/text.js';
@@ -21,6 +22,10 @@ const SELECT = [
   'URL',
   'abstract',
   'event',
+  'volume',
+  'issue',
+  'page',
+  'publisher-location',
 ].join(',');
 
 const PAGE_SIZE = 100;
@@ -43,7 +48,11 @@ interface CrossrefItem {
   'published-print'?: DateParts;
   'published-online'?: DateParts;
   'container-title'?: unknown;
-  event?: { name?: string };
+  event?: { name?: string; location?: string; start?: DateParts; end?: DateParts };
+  volume?: string;
+  issue?: string;
+  page?: string;
+  'publisher-location'?: string;
   publisher?: string;
   type?: string;
   URL?: string;
@@ -112,6 +121,15 @@ export function mapCrossrefItem(raw: unknown, keyword: string, retrievedAt: stri
     documentType: type,
     isPreprint: type === 'posted-content',
     abstract: cleanAbstract(item.abstract),
+    ...biblio({
+      volume: item.volume,
+      issue: item.issue,
+      pages: item.page,
+      // Hội nghị: nơi và thời gian tổ chức; sách: nơi xuất bản.
+      place: item.event
+        ? [cleanText(item.event.location), formatEventDates(item.event.start, item.event.end)].filter(Boolean).join(', ')
+        : item['publisher-location'],
+    }),
     // Crossref không cho biết chắc bài có bản mở hay không nên không suy đoán; trạng thái được bổ sung khi gộp với nguồn khác.
     ...openAccess(),
     sources: ['crossref'],

@@ -2,6 +2,7 @@ import type { PaperRecord } from '../../../shared/types.js';
 import { doiUrl, normalizeDoi } from '../lib/doi.js';
 import { UpstreamError, toUpstreamError } from '../lib/errors.js';
 import { openAccess } from '../lib/oa.js';
+import { biblio } from '../lib/biblio.js';
 import type { HttpClient } from '../lib/http.js';
 import type { Limiter } from '../lib/limiter.js';
 import { cleanAbstract, cleanText, safeHttpUrl } from '../lib/text.js';
@@ -21,7 +22,7 @@ interface S2Paper {
   year?: number | null;
   authors?: { name?: string; authorId?: string | null }[] | null;
   venue?: string | null;
-  journal?: { name?: string } | null;
+  journal?: { name?: string; volume?: string; pages?: string } | null;
   publicationTypes?: string[] | null;
   abstract?: string | null;
   url?: string | null;
@@ -57,6 +58,7 @@ export function mapSemanticScholarPaper(raw: unknown, keyword: string, retrieved
     documentType: Array.isArray(paper.publicationTypes) && paper.publicationTypes[0] ? paper.publicationTypes[0] : '',
     isPreprint: PREPRINT_VENUE.test(venue),
     abstract: cleanAbstract(paper.abstract),
+    ...biblio({ volume: paper.journal?.volume, pages: paper.journal?.pages }),
     ...openAccess({
       isOpenAccess: paper.isOpenAccess === true || Boolean(paper.openAccessPdf?.url),
       oaStatus: paper.openAccessPdf?.status ?? '',

@@ -1,10 +1,12 @@
-import { CopyOutlined, DownloadOutlined, EyeOutlined, LinkOutlined, ReadOutlined } from '@ant-design/icons';
-import { Button, Input, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd';
+import { BookOutlined, CopyOutlined, EyeOutlined, LinkOutlined, ReadOutlined } from '@ant-design/icons';
+import { Button, Checkbox, Input, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import type { SorterResult } from 'antd/es/table/interface';
 import { useMemo, useState } from 'react';
 import { SOURCE_IDS, type PaperRecord } from '../../../shared/types';
 import { copyText } from '../lib/clipboard';
+import { formatReferenceList } from '../lib/citation';
+import { PdfButton } from './PdfButton';
 import {
   NO_DATA,
   SOURCE_LABELS,
@@ -46,9 +48,7 @@ export function AccessCell({ record }: { record: PaperRecord }) {
           {record.oaLicense && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{formatLicense(record.oaLicense)}</Typography.Text>}
         </Space>
         {record.oaPdfUrl ? (
-          <Button size="small" type="primary" ghost icon={<DownloadOutlined />} href={record.oaPdfUrl} target="_blank" rel="noopener noreferrer">
-            Tải PDF
-          </Button>
+          <PdfButton record={record} />
         ) : record.oaUrl ? (
           <Button size="small" icon={<ReadOutlined />} href={record.oaUrl} target="_blank" rel="noopener noreferrer">
             Đọc toàn văn
@@ -85,6 +85,17 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
   const copyDoi = async (doi: string) => {
     if (await copyText(doi)) void messageApi.success(`Đã sao chép DOI: ${doi}`);
     else void messageApi.error('Không sao chép được DOI. Hãy chọn và sao chép thủ công.');
+  };
+
+  const [includeDoi, setIncludeDoi] = useState(false);
+  const selectedRecords = useMemo(() => allRecords.filter((r) => selectedIds.has(r.id)), [allRecords, selectedIds]);
+  // Có bài được chọn thì sao chép các bài đó; chưa chọn bài nào thì sao chép toàn bộ kết quả đang lọc.
+  const referenceTargets = selectedRecords.length > 0 ? selectedRecords : filtered;
+
+  const copyReferences = async (records: PaperRecord[]) => {
+    const text = formatReferenceList(sortByYear(records, yearOrder), { includeDoi });
+    if (await copyText(text)) void messageApi.success(records.length === 1 ? 'Đã sao chép tài liệu tham khảo.' : `Đã sao chép ${records.length} tài liệu tham khảo.`);
+    else void messageApi.error('Không sao chép được. Hãy mở Chi tiết và sao chép thủ công.');
   };
 
   const columns: ColumnsType<PaperRecord> = [
@@ -204,12 +215,19 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
     {
       title: 'Thao tác',
       key: 'actions',
-      width: 96,
+      width: 118,
       fixed: 'right',
       render: (_value, record) => (
-        <Button size="small" icon={<EyeOutlined />} onClick={() => onShowDetail(record)}>
-          Chi tiết
-        </Button>
+        <Space direction="vertical" size={4}>
+          <Button size="small" icon={<EyeOutlined />} onClick={() => onShowDetail(record)}>
+            Chi tiết
+          </Button>
+          <Tooltip title="Sao chép tài liệu tham khảo của bài này">
+            <Button size="small" icon={<BookOutlined />} onClick={() => void copyReferences([record])}>
+              Trích dẫn
+            </Button>
+          </Tooltip>
+        </Space>
       ),
     },
   ];
@@ -289,6 +307,14 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
           Hiển thị <b>{filtered.length}</b>/{allRecords.length} bài · Đã chọn <b>{selectedIds.size}</b>
         </Typography.Text>
         <Space size="small" wrap>
+          <Checkbox checked={includeDoi} onChange={(e) => setIncludeDoi(e.target.checked)}>
+            Kèm DOI
+          </Checkbox>
+          <Tooltip title="Ghi theo quy ước: Tác giả, Tên bài, Tạp chí (tập), số, năm, trang. Có bài được chọn thì sao chép các bài đó, chưa chọn thì sao chép toàn bộ kết quả đang lọc.">
+            <Button size="small" type="primary" ghost icon={<BookOutlined />} disabled={referenceTargets.length === 0} onClick={() => void copyReferences(referenceTargets)}>
+              Sao chép trích dẫn ({referenceTargets.length})
+            </Button>
+          </Tooltip>
           <Button size="small" disabled={filtered.length === 0} onClick={() => onSelectionChange(new Set([...selectedIds, ...filtered.map((r) => r.id)]))}>
             Chọn tất cả {filtered.length} bài đang lọc
           </Button>
@@ -304,7 +330,7 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
         columns={columns}
         dataSource={data}
         onChange={handleChange}
-        scroll={{ x: 1440 }}
+        scroll={{ x: 1460 }}
         sticky
         locale={{ emptyText: 'Không có bài báo nào khớp bộ lọc hiện tại.' }}
         pagination={{ current: page, pageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `${total} bài` }}

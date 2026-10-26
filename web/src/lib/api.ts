@@ -1,5 +1,5 @@
 import type { ExportFormat, PaperRecord, SearchEvent, SearchRequest, SourceHealth, UsageReport } from '../../../shared/types';
-import { toExportPayload } from './records';
+import { pdfFileName, toExportPayload } from './records';
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 
@@ -101,7 +101,10 @@ export async function exportRecords(format: ExportFormat, records: PaperRecord[]
     body: JSON.stringify({ format, records: toExportPayload(records) }),
   });
   if (!response.ok) throw new ApiError(await readHttpError(response), 'http');
-  const blob = await response.blob();
+  saveBlob(await response.blob(), fileName);
+}
+
+function saveBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
@@ -110,4 +113,15 @@ export async function exportRecords(format: ExportFormat, records: PaperRecord[]
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/**
+ * Tải PDF miễn phí về máy. Link PDF của nhà xuất bản ở tên miền khác nên trình duyệt chỉ mở trong trình xem PDF,
+ * vì vậy nhờ máy chủ chuyển tiếp file (chỉ với link do máy chủ đã ký trong kết quả tìm kiếm).
+ */
+export async function downloadPdf(record: PaperRecord): Promise<void> {
+  const query = new URLSearchParams({ url: record.oaPdfUrl, sig: record.oaPdfSig ?? '', name: record.title || record.doi || 'paper' });
+  const response = await request(`/api/download?${query.toString()}`, {});
+  if (!response.ok) throw new ApiError(await readHttpError(response), 'http', response.status);
+  saveBlob(await response.blob(), pdfFileName(record));
 }

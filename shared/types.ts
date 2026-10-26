@@ -37,6 +37,14 @@ export interface PaperRecord {
   /** Nguồn cho biết đây là preprint / posted-content. */
   isPreprint: boolean;
   abstract: string;
+  /** Tập (volume) của tạp chí/sách; rỗng nếu nguồn không có. */
+  volume?: string;
+  /** Số (issue) của tạp chí. */
+  issue?: string;
+  /** Trang, dạng "313-325" hoặc "313". */
+  pages?: string;
+  /** Nơi xuất bản (sách) hoặc nơi và thời gian tổ chức (hội nghị). */
+  place?: string;
   /** Có ít nhất một nguồn cho biết bài có bản đọc miễn phí hợp pháp (truy cập mở). */
   isOpenAccess: boolean;
   /** Trạng thái truy cập mở theo nguồn (vd. gold, green, hybrid, bronze, closed); rỗng nếu nguồn không nêu. */
@@ -45,6 +53,8 @@ export interface PaperRecord {
   oaUrl: string;
   /** Link trực tiếp tới file PDF miễn phí. Rỗng nếu nguồn không cung cấp. */
   oaPdfUrl: string;
+  /** Chữ ký do máy chủ cấp cho `oaPdfUrl`, dùng để xin máy chủ chuyển tiếp file PDF (/api/download). */
+  oaPdfSig?: string;
   /** Giấy phép của bản mở (vd. cc-by). Rỗng nếu nguồn không nêu. */
   oaLicense: string;
   /** Tất cả nguồn đã tìm thấy bài báo này. */

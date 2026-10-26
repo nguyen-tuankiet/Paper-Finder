@@ -4,6 +4,7 @@ import { HttpClient } from './lib/http.js';
 import { Limiter } from './lib/limiter.js';
 import { createLogger } from './logger.js';
 import { StatsService } from './services/stats.js';
+import { UrlSigner } from './services/download.js';
 import { CrossrefAdapter } from './sources/crossref.js';
 import { OpenAlexAdapter } from './sources/openalex.js';
 import { ArxivAdapter } from './sources/arxiv.js';
@@ -44,7 +45,14 @@ if (config.semanticScholarApiKey) {
 }
 
 const stats = new StatsService({ filePath: config.statsFile, timezone: config.statsTimezone, retentionDays: config.statsRetentionDays, logger });
-const app = createApp({ adapters, config, logger, stats });
+const app = createApp({
+  adapters,
+  config,
+  logger,
+  stats,
+  signer: new UrlSigner(config.downloadSecret),
+  downloadOptions: { maxBytes: config.downloadMaxBytes },
+});
 const server = app.listen(config.port, () => {
   logger.info('server_started', {
     port: config.port,

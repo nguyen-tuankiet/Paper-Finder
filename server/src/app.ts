@@ -15,8 +15,27 @@ import { CONTENT_TYPES, exportFilename, toCsv, toXlsx } from './services/export.
 import { SourceHealthService } from './services/health.js';
 import { runSearch, type AdapterMap } from './services/search.js';
 import { StatsService } from './services/stats.js';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { DEFAULT_DOWNLOAD_OPTIONS, DownloadError, UrlSigner, openPdf, safePdfFileName, type DownloadErrorCode, type DownloadOptions } from './services/download.js';
+
+const DOWNLOAD_STATUS: Record<DownloadErrorCode, number> = {
+  bad_url: 400,
+  blocked: 400,
+  not_pdf: 422,
+  too_large: 413,
+  timeout: 504,
+  upstream: 502,
+  network: 502,
+  cancelled: 499,
+};
+
+const MAX_ACTIVE_DOWNLOADS = 4;
 
 export interface AppDeps {
+  /** Ký/kiểm tra link PDF cho /api/download. Mặc định dùng khóa ngẫu nhiên mỗi lần khởi động. */
+  signer?: UrlSigner;
+  downloadOptions?: Partial<DownloadOptions>;
   adapters: AdapterMap;
   config: Pick<AppConfig, 'corsOrigins' | 'rateLimitPerMinute' | 'trustProxy' | 'staticDir'> & Partial<Pick<AppConfig, 'adminPassword'>>;
   logger: Logger;
@@ -35,7 +54,9 @@ function issuesOf(error: ZodError) {
   return error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message }));
 }
 
-export function createApp({ adapters, config, logger, stats = new StatsService() }: AppDeps) {
+export function createApp({ adapters, config, logger, stats = new StatsService(), signer = new UrlSigner(), downloadOptions }: AppDeps) {
+  const downloadOpts: DownloadOptions = { ...DEFAULT_DOWNLOAD_OPTIONS, ...downloadOptions };
+  let activeDownloads = 0;
   const app = express();
   app.disable('x-powered-by');
   if (config.trustProxy) app.set('trust proxy', /^\d+$/.test(config.trustProxy) ? Number(config.trustProxy) : config.trustProxy);
@@ -137,6 +158,7 @@ export function createApp({ adapters, config, logger, stats = new StatsService()
         adapters,
         signal: controller.signal,
         logger,
+        signUrl: (url) => signer.sign(url),
         onProgress: (progress) => send({ type: 'progress', ...progress }),
       });
       send({ type: 'result', result });
@@ -156,6 +178,76 @@ export function createApp({ adapters, config, logger, stats = new StatsService()
     } finally {
       clearInterval(heartbeat);
       res.end();
+    }
+  });
+
+  const downloadLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: Math.max(5, Math.floor(config.rateLimitPerMinute / 3)),
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'rate_limited', message: 'Bạn tải quá nhanh. Vui lòng thử lại sau ít phút.' },
+  });
+
+  /**
+   * Chuyển tiếp file PDF miễn phí để trình duyệt TẢI VỀ trực tiếp (link PDF của nhà xuất bản ở tên miền khác
+   * thì trình duyệt chỉ mở trong trình xem). Chỉ nhận link đã được máy chủ ký trong kết quả tìm kiếm, chặn địa chỉ nội bộ,
+   * giới hạn dung lượng và chỉ chấp nhận dữ liệu thực sự là PDF.
+   */
+  app.get('/api/download', downloadLimiter, async (req, res) => {
+    const url = typeof req.query.url === 'string' ? req.query.url : '';
+    const sig = typeof req.query.sig === 'string' ? req.query.sig : '';
+    if (!url || !sig || !signer.verify(url, sig)) {
+      res.status(403).json({ error: 'forbidden', message: 'Link tải không hợp lệ hoặc đã hết hạn. Hãy tìm kiếm lại rồi thử tải lần nữa.' });
+      return;
+    }
+    if (activeDownloads >= MAX_ACTIVE_DOWNLOADS) {
+      res.setHeader('Retry-After', '5');
+      res.status(503).json({ error: 'busy', message: 'Máy chủ đang bận tải file khác. Vui lòng thử lại sau vài giây.' });
+      return;
+    }
+
+    activeDownloads++;
+    const controller = new AbortController();
+    let opened: Awaited<ReturnType<typeof openPdf>> | undefined;
+    res.on('close', () => {
+      controller.abort();
+      opened?.destroy();
+    });
+
+    try {
+      opened = await openPdf(url, downloadOpts, controller.signal);
+      const names = safePdfFileName(req.query.name);
+      res.status(200);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${names.ascii}"; filename*=UTF-8''${encodeURIComponent(names.unicode)}`);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'no-store');
+      if (opened.contentLength !== undefined) res.setHeader('Content-Length', String(opened.contentLength));
+      const source = opened;
+      async function* body() {
+        let total = source.first.length;
+        yield source.first;
+        for await (const chunk of source.rest) {
+          total += chunk.length;
+          if (total > downloadOpts.maxBytes) throw new DownloadError('too_large', 'File vượt giới hạn dung lượng.');
+          yield chunk;
+        }
+      }
+      await pipeline(Readable.from(body()), res);
+    } catch (error) {
+      if (error instanceof DownloadError && !res.headersSent) {
+        if (error.code !== 'cancelled') logger.warn('download_rejected', { code: error.code });
+        res.status(DOWNLOAD_STATUS[error.code]).json({ error: error.code, message: error.message });
+      } else if (!res.headersSent) {
+        logger.error('download_failed', { error: error instanceof Error ? error.message : String(error) });
+        res.status(502).json({ error: 'upstream', message: 'Không tải được file.' });
+      } else {
+        res.destroy(); // đã gửi một phần: ngắt kết nối để trình duyệt báo tải lỗi thay vì lưu file thiếu
+      }
+    } finally {
+      opened?.destroy();
+      activeDownloads--;
     }
   });
 

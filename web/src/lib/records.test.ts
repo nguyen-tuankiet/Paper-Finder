@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PaperRecord } from '../../../shared/types';
-import { DEFAULT_FILTERS, authorsShort, docTypeLabel, exportFileName, filterRecords, formatLicense, parseKeywords, publisherUrl, sortByYear, toExportPayload } from './records';
+import { DEFAULT_FILTERS, authorsShort, docTypeLabel, exportFileName, filterRecords, formatLicense, parseKeywords, pdfFileName, publisherUrl, sortByYear, toExportPayload } from './records';
 
 function rec(overrides: Partial<PaperRecord>): PaperRecord {
   return {
@@ -67,6 +67,13 @@ describe('lọc theo truy cập (miễn phí / chưa thấy bản miễn phí)',
     expect(publisherUrl(closed)).toBe('https://doi.org/10.1/c');
     expect(publisherUrl(rec({ originalUrl: 'https://p.org/x' }))).toBe('https://p.org/x');
     expect(publisherUrl(rec({}))).toBe('');
+  });
+  it('pdfFileName: tên file theo tiêu đề, an toàn', () => {
+    expect(pdfFileName({ title: 'Trí tuệ nhân tạo: ứng dụng?', doi: '' })).toBe('Trí tuệ nhân tạo ứng dụng.pdf');
+    expect(pdfFileName({ title: '', doi: '10.1/x' })).toBe('10.1 x.pdf');
+    expect(pdfFileName({ title: '../../a"b', doi: '' })).not.toMatch(/[\\/"]/);
+    expect(pdfFileName({ title: 'x'.repeat(300), doi: '' }).length).toBeLessThanOrEqual(124);
+    expect(pdfFileName({ title: '', doi: '' })).toBe('paper.pdf');
   });
   it('formatLicense', () => {
     expect(formatLicense('cc-by-nc-nd')).toBe('CC BY-NC-ND');

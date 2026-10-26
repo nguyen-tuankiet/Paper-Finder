@@ -1,7 +1,9 @@
-import { CopyOutlined } from '@ant-design/icons';
+import { BookOutlined, CopyOutlined } from '@ant-design/icons';
 import { Button, Descriptions, Drawer, Space, Tag, Typography, message } from 'antd';
 import type { PaperRecord } from '../../../shared/types';
 import { copyText } from '../lib/clipboard';
+import { formatReference } from '../lib/citation';
+import { PdfButton } from './PdfButton';
 import { NO_DATA, SOURCE_LABELS, docTypeLabel, doiUrl, formatLicense, publisherUrl } from '../lib/records';
 
 const muted = (text: string) => <Typography.Text type="secondary">{text}</Typography.Text>;
@@ -80,11 +82,7 @@ export function DetailDrawer({ record, onClose }: { record: PaperRecord | null; 
                     {record.oaStatus && <Typography.Text type="secondary"> · loại: {record.oaStatus}</Typography.Text>}
                   </span>
                   <Space wrap>
-                    {record.oaPdfUrl && (
-                      <Button size="small" type="primary" href={record.oaPdfUrl} target="_blank" rel="noopener noreferrer">
-                        Tải PDF
-                      </Button>
-                    )}
+                    {record.oaPdfUrl && <PdfButton record={record} ghost={false} />}
                     {record.oaUrl && (
                       <Button size="small" href={record.oaUrl} target="_blank" rel="noopener noreferrer">
                         Đọc toàn văn
@@ -135,6 +133,20 @@ export function DetailDrawer({ record, onClose }: { record: PaperRecord | null; 
             </Descriptions.Item>
             <Descriptions.Item label="Thời điểm lấy dữ liệu">{new Date(record.retrievedAt).toLocaleString('vi-VN')}</Descriptions.Item>
           </Descriptions>
+          <div>
+            <Space style={{ justifyContent: 'space-between', width: '100%' }} wrap>
+              <Typography.Text strong>Tài liệu tham khảo</Typography.Text>
+              <Button size="small" icon={<BookOutlined />} onClick={() => void copy(formatReference(record), 'tài liệu tham khảo')}>
+                Sao chép
+              </Button>
+            </Space>
+            <Typography.Paragraph style={{ marginTop: 8, background: '#f4f6f9', padding: 10, borderRadius: 6, userSelect: 'all' }}>
+              {formatReference(record)}
+            </Typography.Paragraph>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              Ghi theo quy ước (tác giả, tên bài, tạp chí, tập, số, năm, trang). Phần nào nguồn không có sẽ bị bỏ qua; hãy đối chiếu với bài gốc trước khi dùng.
+            </Typography.Text>
+          </div>
           <div>
             <Typography.Text strong>Abstract</Typography.Text>
             <Typography.Paragraph style={{ marginTop: 8, whiteSpace: 'pre-wrap' }}>

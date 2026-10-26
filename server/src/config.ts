@@ -18,6 +18,10 @@ const envSchema = z.object({
   CACHE_TTL_SECONDS: z.coerce.number().int().min(0).max(86400).default(600),
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(10000).default(30),
   TRUST_PROXY: z.string().optional(),
+  /** Khóa ký link tải PDF. Không đặt = tạo ngẫu nhiên mỗi lần khởi động (link cũ hết hạn khi khởi động lại). */
+  DOWNLOAD_SECRET: z.string().min(16, 'DOWNLOAD_SECRET cần ít nhất 16 ký tự').optional(),
+  /** Dung lượng tối đa mỗi file PDF chuyển tiếp (MB). */
+  DOWNLOAD_MAX_MB: z.coerce.number().int().min(1).max(500).default(100),
   /** Mật khẩu trang admin (/admin). Không đặt = trang admin và API admin bị tắt. */
   ADMIN_PASSWORD: z.string().min(8, 'ADMIN_PASSWORD cần ít nhất 8 ký tự').optional(),
   /** File JSON lưu thống kê sử dụng. Mặc định: ./data/stats.json (thư mục hiện tại của backend). */
@@ -42,6 +46,8 @@ export interface AppConfig {
   rateLimitPerMinute: number;
   trustProxy?: string;
   adminPassword?: string;
+  downloadSecret?: string;
+  downloadMaxBytes: number;
   statsFile: string;
   statsTimezone: string;
   statsRetentionDays: number;
@@ -86,6 +92,8 @@ export function parseConfig(env: Record<string, string | undefined>, cwd = proce
     rateLimitPerMinute: parsed.RATE_LIMIT_PER_MINUTE,
     trustProxy: parsed.TRUST_PROXY,
     adminPassword: parsed.ADMIN_PASSWORD,
+    downloadSecret: parsed.DOWNLOAD_SECRET,
+    downloadMaxBytes: parsed.DOWNLOAD_MAX_MB * 1024 * 1024,
     statsFile: parsed.STATS_FILE ? path.resolve(cwd, parsed.STATS_FILE) : path.resolve(cwd, 'data', 'stats.json'),
     statsTimezone: parsed.STATS_TIMEZONE,
     statsRetentionDays: parsed.STATS_RETENTION_DAYS,

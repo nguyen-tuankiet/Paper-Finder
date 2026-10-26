@@ -29,6 +29,8 @@ export interface RunSearchOptions {
   onProgress?: (progress: SearchProgress) => void;
   logger?: Logger;
   now?: () => Date;
+  /** Ký URL PDF để client có thể xin máy chủ chuyển tiếp file qua /api/download. */
+  signUrl?: (url: string) => string;
 }
 
 interface SourceRun {
@@ -103,7 +105,11 @@ export async function runSearch(request: SearchRequest, options: RunSearchOption
   });
 
   const raw = runs.flatMap((run) => run.records);
-  const { records, duplicatesRemoved, suspectedDuplicates } = dedupeRecords(raw);
+  const deduped = dedupeRecords(raw);
+  const { duplicatesRemoved, suspectedDuplicates } = deduped;
+  const records = options.signUrl
+    ? deduped.records.map((r) => (r.oaPdfUrl ? { ...r, oaPdfSig: options.signUrl!(r.oaPdfUrl) } : r))
+    : deduped.records;
   const withDoi = records.filter((record) => record.doi).length;
 
   logger.info('search_finished', {

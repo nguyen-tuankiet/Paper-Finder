@@ -107,7 +107,22 @@ Nguồn dữ liệu truy cập mở:
 
 Khi một bài có ở nhiều nguồn, chỉ cần một nguồn xác nhận là bản mở thì cả bài được gắn “Miễn phí”; URL và giấy phép chỉ lấy từ các bản ghi xác nhận là mở.
 
-**Hạn chế:** dữ liệu truy cập mở không hoàn hảo. Thử với dữ liệu thật (25–26/10/2026), khoảng 3/4 link PDF mở được đúng file PDF; số còn lại hỏng (404), lỗi kết nối hoặc dẫn tới trang HTML (có thể là trang đăng ký). Các nút luôn mở link gốc của nơi cung cấp (tab mới); **máy chủ PaperFinder không tải hay lưu trữ lại file PDF**. Ứng dụng không tích hợp các trang chia sẻ tài liệu vi phạm bản quyền (Sci-Hub, LibGen...).
+**Nút "Tải PDF"** tải file về máy trực tiếp. Link PDF của nhà xuất bản ở tên miền khác nên trình duyệt chỉ mở trong trình xem PDF (thuộc tính `download` bị bỏ qua), vì vậy máy chủ PaperFinder chuyển tiếp file qua `GET /api/download` (không lưu file, chỉ truyền thẳng). Các biện pháp an toàn:
+- Chỉ chuyển tiếp link PDF do **chính máy chủ đã ký** (HMAC) trong kết quả tìm kiếm; không thể dùng làm proxy cho URL bất kỳ.
+- Chặn truy cập địa chỉ nội bộ/đám mây (SSRF), kể cả IP viết dạng lạ (thập phân, hex, IPv6 nhúng IPv4) và chuyển hướng vào mạng nội bộ; chỉ http(s); kiểm tra lại ở mỗi chặng chuyển hướng.
+- Chỉ nhận dữ liệu thực sự bắt đầu bằng `%PDF-`; giới hạn dung lượng (`DOWNLOAD_MAX_MB`), timeout, tối đa 4 lượt tải đồng thời và giới hạn tốc độ theo IP.
+- Dùng `User-Agent` trung thực (`PaperFinder/1.0`), **không giả trình duyệt để vượt chặn bot**.
+
+**Hạn chế:** dữ liệu truy cập mở không hoàn hảo. Thử với dữ liệu thật (26/10/2026), nhiều nhà xuất bản (ví dụ MDPI) trả HTTP 403 cho tải tự động từ máy chủ, một số link hỏng (404), lỗi kết nối hoặc dẫn tới trang HTML (có thể là trang đăng ký). Khi không tải trực tiếp được, giao diện báo lý do và tự mở link gốc ở tab mới để khách lưu từ trình xem PDF (Ctrl+S). Băng thông tải file đi qua máy chủ của bạn (cần tính khi dùng gói miễn phí). Ứng dụng không tích hợp các trang chia sẻ tài liệu vi phạm bản quyền (Sci-Hub, LibGen...).
+
+## Sao chép tài liệu tham khảo
+
+Nút **Trích dẫn** (mỗi bài), **Sao chép trích dẫn (n)** (các bài đã chọn, hoặc toàn bộ kết quả đang lọc nếu chưa chọn; đánh số [1], [2]...) và mục *Tài liệu tham khảo* trong ngăn Chi tiết. Tùy chọn **Kèm DOI**. Ghi theo quy ước:
+- Bài tạp chí: `Tác giả, Tên bài báo, Tên tạp chí (tập), no. số, năm, pp. trang.` Ví dụ: `Kumar S, Superconvergence of a ..., IMA Journal of Numerical Analysis (7), 1987, pp. 313 - 325.`
+- Hội nghị: `Tác giả, Tên bài báo, Tên hội nghị, nơi và thời gian tổ chức.`
+- Sách: `Tác giả, Tên sách, Nhà xuất bản, Nơi xuất bản, Năm.` (chương sách thêm `in <tên sách>`).
+
+Tác giả ghi dạng `Họ + chữ cái đầu của tên` (ví dụ `Nguyễn VA`), tối đa 6 tác giả rồi `et al.`. **Phần nào nguồn không có thì bị bỏ qua, không bịa**; tập/số/trang/nơi lấy từ Crossref, OpenAlex, Europe PMC, DOAJ, Semantic Scholar nên có bài thiếu. Họ tên Việt Nam trong dữ liệu không tách họ/tên được nhận dạng theo họ phổ biến nên có thể sai ở vài trường hợp. Hãy đối chiếu với bài gốc trước khi dùng.
 
 ## Trang quản trị (thống kê sử dụng)
 

@@ -2,6 +2,7 @@ import type { PaperRecord } from '../../../shared/types.js';
 import { doiUrl, normalizeDoi } from '../lib/doi.js';
 import { UpstreamError, toUpstreamError } from '../lib/errors.js';
 import { openAccess } from '../lib/oa.js';
+import { biblio } from '../lib/biblio.js';
 import type { HttpClient } from '../lib/http.js';
 import type { Limiter } from '../lib/limiter.js';
 import { cleanAbstract, cleanText, safeHttpUrl } from '../lib/text.js';
@@ -18,7 +19,9 @@ interface DoajBibjson {
   author?: { name?: string; orcid_id?: string }[];
   identifier?: { id?: string; type?: string }[];
   link?: { type?: string; content_type?: string; url?: string }[];
-  journal?: { title?: string; publisher?: string };
+  journal?: { title?: string; publisher?: string; volume?: string; number?: string };
+  start_page?: string;
+  end_page?: string;
 }
 
 interface DoajResponse {
@@ -51,6 +54,7 @@ export function mapDoajArticle(raw: unknown, keyword: string, retrievedAt: strin
     documentType: '', // DOAJ không cung cấp loại tài liệu trong bản ghi
     isPreprint: false,
     abstract: cleanAbstract(bib.abstract),
+    ...biblio({ volume: bib.journal?.volume, issue: bib.journal?.number, firstPage: bib.start_page, lastPage: bib.end_page }),
     // DOAJ chỉ lập chỉ mục tạp chí truy cập mở nên mọi bài đều là bản mở; link toàn văn là trang bài báo trên tạp chí.
     ...openAccess({
       isOpenAccess: true,

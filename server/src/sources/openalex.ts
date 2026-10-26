@@ -2,6 +2,7 @@ import type { Author, PaperRecord } from '../../../shared/types.js';
 import { doiUrl, normalizeDoi } from '../lib/doi.js';
 import { UpstreamError, toUpstreamError } from '../lib/errors.js';
 import { looksLikePdf, openAccess } from '../lib/oa.js';
+import { biblio } from '../lib/biblio.js';
 import type { HttpClient } from '../lib/http.js';
 import type { Limiter } from '../lib/limiter.js';
 import { abstractFromInvertedIndex, cleanText, safeHttpUrl } from '../lib/text.js';
@@ -18,6 +19,7 @@ const SELECT = [
   'abstract_inverted_index',
   'open_access',
   'best_oa_location',
+  'biblio',
 ].join(',');
 
 const MAX_PER_PAGE = 100;
@@ -47,6 +49,7 @@ interface OpenAlexBestLocation {
 }
 
 interface OpenAlexWork {
+  biblio?: { volume?: string | null; issue?: string | null; first_page?: string | null; last_page?: string | null } | null;
   open_access?: OpenAlexOpenAccess | null;
   best_oa_location?: OpenAlexBestLocation | null;
   id?: string;
@@ -103,6 +106,7 @@ export function mapOpenAlexWork(raw: unknown, keyword: string, retrievedAt: stri
     documentType: type,
     isPreprint: type === 'preprint',
     abstract: abstractFromInvertedIndex(work.abstract_inverted_index),
+    ...biblio({ volume: work.biblio?.volume, issue: work.biblio?.issue, firstPage: work.biblio?.first_page, lastPage: work.biblio?.last_page }),
     ...openAccess({
       isOpenAccess: isOpen,
       oaStatus: oa?.oa_status ?? '',
