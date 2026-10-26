@@ -472,187 +472,100 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* ---------- Thẻ treo giới thiệu ứng dụng khác ---------- */
-.pf-hang {
-  position: fixed;
-  top: 54px;
-  right: 20px;
-  z-index: 60;
-  width: 124px;
+/* ---------- Popup giới thiệu sản phẩm ---------- */
+.pf-promo .ant-modal-container {
+  padding: 28px 28px 24px;
 }
 
-.pf-hang-rail {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  height: 18px;
-  padding: 0 24px 0 6px;
-  border-radius: 11px;
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(16, 48, 78, 0.28);
+.pf-promo-title.ant-typography {
+  margin: 0 0 6px;
+  padding-right: 32px;
+  color: var(--pf-primary-dark);
+  font-size: 21px;
 }
 
-.pf-hang-nail {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #8a97a8;
-  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+.pf-promo-lead {
+  margin: 0 0 20px;
+  color: #5b6877;
+  font-size: 14px;
+  line-height: 1.55;
 }
 
-.pf-hang-close {
-  position: absolute;
-  top: 50%;
-  right: 3px;
-  transform: translateY(-50%);
+.pf-promo-grid {
   display: grid;
-  place-items: center;
-  width: 14px;
-  height: 14px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: #e9eef4;
-  color: #44536a;
-  font-size: 8px;
-  cursor: pointer;
-}
-.pf-hang-close:hover {
-  background: #d5deea;
-  color: #11335a;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
 }
 
-.pf-hang-items {
-  display: flex;
-  justify-content: space-around;
-  padding: 0 6px;
-}
-
-.pf-hang-swing {
+.pf-promo-card {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  cursor: pointer;
-  text-decoration: none;
-  transform-origin: 50% 0;
-  animation: pf-swing 3.4s ease-in-out infinite alternate;
-}
-.pf-hang-swing-1 {
-  animation-duration: 4.1s;
-  animation-delay: -1.3s;
-}
-.pf-hang-swing:hover,
-.pf-hang-swing:focus-visible,
-.pf-hang-items:hover .pf-hang-swing {
-  animation-play-state: paused;
-}
-
-.pf-hang-string {
-  width: 2px;
-  height: 20px;
-  background: #8a97a8;
-}
-
-.pf-hang-tag {
-  display: grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  border: 2px solid var(--pf-primary, #1f4e79);
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 5px 12px rgba(16, 48, 78, 0.25);
-  transition: transform 0.15s, box-shadow 0.15s;
-}
-.pf-hang-tag img,
-.pf-hang-tag svg {
-  display: block;
-  border-radius: 50%;
-}
-.pf-hang-tag.is-active,
-.pf-hang-swing:hover .pf-hang-tag {
-  transform: scale(1.1);
-  box-shadow: 0 8px 18px rgba(16, 48, 78, 0.32);
-}
-
-.pf-hang-info {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 272px;
-  max-width: calc(100vw - 24px);
-  margin-top: 6px;
-  padding: 14px 16px;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 18px 16px 16px;
   border: 1px solid var(--pf-border);
-  border-top: 3px solid var(--pf-primary, #1f4e79);
+  border-top: 3px solid var(--accent);
   border-radius: 10px;
   background: #fff;
-  box-shadow: 0 12px 30px rgba(16, 48, 78, 0.25);
-  color: var(--pf-text, #1f2d3d);
+  color: var(--pf-text);
   text-decoration: none;
-  animation: pf-pop 0.14s ease-out;
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
 }
-.pf-hang-info strong {
-  font-size: 15px;
+.pf-promo-card:hover,
+.pf-promo-card:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(16, 48, 78, 0.14);
+  border-color: var(--accent);
 }
-.pf-hang-tagline {
-  font-size: 13px;
-  font-weight: 600;
+
+.pf-promo-logo {
+  display: block;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 4px;
+  border-radius: 12px;
 }
-.pf-hang-desc {
+
+.pf-promo-name {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.pf-promo-desc {
+  flex: 1;
   color: #5b6877;
-  font-size: 12.5px;
+  font-size: 13.5px;
   line-height: 1.5;
 }
-.pf-hang-go {
-  margin-top: 6px;
-  color: var(--pf-primary, #1f4e79);
-  font-size: 13px;
+
+.pf-promo-cta {
+  margin-top: 10px;
+  color: var(--accent);
+  font-size: 13.5px;
   font-weight: 600;
 }
-.pf-hang-info:hover .pf-hang-go {
+.pf-promo-card:hover .pf-promo-cta {
   text-decoration: underline;
 }
 
-@keyframes pf-swing {
-  from {
-    transform: rotate(-7deg);
+@media (max-width: 560px) {
+  .pf-promo .ant-modal-container {
+    padding: 22px 16px 18px;
   }
-  to {
-    transform: rotate(7deg);
-  }
-}
-@keyframes pf-pop {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@media (max-width: 640px) {
-  .pf-hang {
-    right: 10px;
+  .pf-promo-grid {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pf-hang-swing {
-    animation: none;
+  .pf-promo .ant-modal,
+  .pf-promo .ant-modal-mask,
+  .pf-promo .ant-modal-wrap {
+    animation: none !important;
+    transition: none !important;
   }
-  .pf-hang-info {
-    animation: none;
+  .pf-promo-card {
+    transition: none;
   }
 }
 
@@ -783,7 +696,19 @@ body {
   color: rgba(214, 232, 252, 0.82);
 }
 
-/* Khối "Theo dõi": kiểu dáng như ô nhập + nút gửi, nhưng là liên kết thật tới GitHub */
+.pf-footer-products {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: rgba(214, 232, 252, 0.82);
+}
+.pf-footer-products a {
+  color: #fff;
+}
+.pf-footer-products a:hover {
+  color: #8fdcff;
+}
+
+/* Khối "Theo dõi":kiểu dáng như ô nhập + nút gửi, nhưng là liên kết thật tới GitHub */
 .pf-follow {
   display: flex;
   align-items: stretch;

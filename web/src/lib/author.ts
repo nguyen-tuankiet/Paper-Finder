@@ -24,8 +24,7 @@ export interface OtherApp {
   key: 'cocoflow' | 'muse';
   name: string;
   url: string;
-  tagline: string;
-  description?: string;
+  description: string;
 }
 
 export const OTHER_APPS: OtherApp[] = [
@@ -33,14 +32,13 @@ export const OTHER_APPS: OtherApp[] = [
     key: 'cocoflow',
     name: 'Cocoflow',
     url: 'https://coco-flow-zeta.vercel.app/',
-    tagline: 'Thao tác chuyển đổi file trong tích tắc',
+    description: 'Chuyển đổi file nhanh chóng, hỗ trợ nhiều định dạng.',
   },
   {
     key: 'muse',
     name: 'Muse Studio',
     url: 'https://muse-studio-landing.vercel.app/',
-    tagline: 'Tạo video YouTube tự động, nhanh chóng và dễ dàng',
-    description: 'Dùng AI tạo video YouTube theo chủ đề của từng kênh, duyệt trước khi đăng và đặt lịch đăng hằng ngày.',
+    description: 'Tạo video YouTube bằng AI, quản lý quy trình sáng tạo.',
   },
 ];
 

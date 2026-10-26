@@ -1,7 +1,7 @@
 import { ArrowRightOutlined, FileTextOutlined, GithubOutlined, LinkedinOutlined, MailOutlined, TwitterOutlined, YoutubeOutlined } from '@ant-design/icons';
 import { Col, Layout, Row } from 'antd';
 import { useState, type ReactNode } from 'react';
-import { AUTHOR, DATA_SOURCE_LINKS, FOOTER } from '../lib/author';
+import { AUTHOR, DATA_SOURCE_LINKS, FOOTER, OTHER_APPS } from '../lib/author';
 import { InfoModal, type InfoKind } from './InfoModals';
 
 const external = { target: '_blank', rel: 'noopener noreferrer' } as const;
@@ -106,6 +106,17 @@ export function AppFooter() {
                 <ArrowRightOutlined />
               </span>
             </a>
+            <p className="pf-footer-products">
+              Sản phẩm khác:{' '}
+              {OTHER_APPS.map((app, i) => (
+                <span key={app.key}>
+                  {i > 0 && ' · '}
+                  <a href={app.url} {...external}>
+                    {app.name}
+                  </a>
+                </span>
+              ))}
+            </p>
           </Col>
         </Row>
 
