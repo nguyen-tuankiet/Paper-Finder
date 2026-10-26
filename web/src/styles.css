@@ -137,20 +137,11 @@ body {
 }
 
 .pf-logo {
-  width: 40px;
-  height: 40px;
+  display: block;
+  width: 48px;
+  height: 48px;
   flex: none;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.16);
-  display: grid;
-  place-items: center;
-}
-
-.pf-logo-sm {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  background: var(--pf-primary);
+  object-fit: contain;
 }
 
 .pf-brand-title {
@@ -750,11 +741,8 @@ body {
 }
 
 .pf-footer .pf-logo-sm {
-  width: 42px;
-  height: 42px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.16);
-  font-size: 20px;
+  width: 46px;
+  height: 46px;
 }
 
 .pf-footer-name {

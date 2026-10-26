@@ -1,4 +1,4 @@
-import { ArrowRightOutlined, FileTextOutlined, GithubOutlined, LinkedinOutlined, MailOutlined, TwitterOutlined, YoutubeOutlined } from '@ant-design/icons';
+import { ArrowRightOutlined, GithubOutlined, LinkedinOutlined, MailOutlined, TwitterOutlined, YoutubeOutlined } from '@ant-design/icons';
 import { Col, Layout, Row } from 'antd';
 import { useState, type ReactNode } from 'react';
 import { AUTHOR, DATA_SOURCE_LINKS, FOOTER, OTHER_APPS } from '../lib/author';
@@ -42,9 +42,7 @@ export function AppFooter() {
         <Row gutter={[32, 28]}>
           <Col xs={24} md={9}>
             <div className="pf-footer-brand">
-              <span className="pf-logo pf-logo-sm" aria-hidden="true">
-                <FileTextOutlined style={{ color: '#fff' }} />
-              </span>
+              <img className="pf-logo pf-logo-sm" src="/logo.png" alt="" width={44} height={44} draggable={false} />
               <div>
                 <div className="pf-footer-name">PaperFinder</div>
                 <div className="pf-footer-tagline">{FOOTER.tagline}</div>

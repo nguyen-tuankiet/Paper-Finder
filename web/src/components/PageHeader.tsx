@@ -1,4 +1,3 @@
-import { FileTextOutlined } from '@ant-design/icons';
 import { Typography } from 'antd';
 import type { ReactNode } from 'react';
 
@@ -16,9 +15,7 @@ export function PageHeader({ subtitle, right, hero }: Props) {
     <header className={hero ? 'pf-header pf-header-hero' : 'pf-header'}>
       <div className="pf-header-inner pf-header-row">
         <a className="pf-brand" href="/" aria-label="PaperFinder - về trang chủ">
-          <span className="pf-logo" aria-hidden="true">
-            <FileTextOutlined style={{ fontSize: 20, color: '#fff' }} />
-          </span>
+          <img className="pf-logo" src="/logo.png" alt="" width={48} height={48} draggable={false} />
           <span>
             <Typography.Title level={3} className="pf-brand-title">
               PaperFinder
