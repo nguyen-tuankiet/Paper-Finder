@@ -36,10 +36,10 @@ function markClosed() {
 }
 
 /** Logo lấy từ favicon của từng trang (Cocoflow: web/public/apps/cocoflow.png; Muse Studio: vẽ lại từ favicon SVG của trang). */
-function Logo({ appKey }: { appKey: OtherApp['key'] }) {
-  if (appKey === 'cocoflow') return <img className="pf-promo-logo" src="/apps/cocoflow.png" alt="" width={48} height={48} draggable={false} />;
+function Logo({ appKey, className = 'pf-promo-logo' }: { appKey: OtherApp['key']; className?: string }) {
+  if (appKey === 'cocoflow') return <img className={className} src="/apps/cocoflow.png" alt="" width={48} height={48} draggable={false} />;
   return (
-    <svg className="pf-promo-logo" viewBox="0 0 32 32" aria-hidden="true">
+    <svg className={className} viewBox="0 0 32 32" aria-hidden="true">
       <rect width="32" height="32" rx="9" fill="#2563eb" />
       <path d="M9 22V10l7 8 7-8v12" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
@@ -49,9 +49,11 @@ function Logo({ appKey }: { appKey: OtherApp['key'] }) {
 /**
  * Popup giới thiệu các sản phẩm khác của tác giả. Hiện một lần sau SHOW_DELAY_MS khi vào trang;
  * đóng bằng nút ×, phím Esc hoặc bấm nền. Không tự mở tab nào: chỉ mở khi người dùng bấm vào sản phẩm.
+ * Sau khi đóng, popup thu lại thành nút tròn ở mép phải màn hình; bấm nút để mở lại.
  */
 export function ProductPopup() {
   const [open, setOpen] = useState(false);
+  const [minimized, setMinimized] = useState(wasClosedRecently);
 
   useEffect(() => {
     if (wasClosedRecently()) return;
@@ -64,26 +66,36 @@ export function ProductPopup() {
   const close = () => {
     markClosed();
     setOpen(false);
+    setMinimized(true);
   };
 
   return (
-    <Modal open={open} onCancel={close} footer={null} centered width={620} rootClassName="pf-promo" destroyOnHidden aria-label="Khám phá hệ sinh thái của chúng tôi">
-      <Typography.Title level={3} className="pf-promo-title">
-        Khám phá hệ sinh thái của chúng tôi
-      </Typography.Title>
-      <p className="pf-promo-lead">Ngoài PaperFinder, hãy khám phá thêm các công cụ hỗ trợ công việc và sáng tạo nội dung.</p>
-      <div className="pf-promo-grid">
-        {OTHER_APPS.map((app) => (
-          <a key={app.key} className="pf-promo-card" href={app.url} target="_blank" rel="noopener noreferrer" style={{ '--accent': ACCENT[app.key] } as CSSProperties}>
-            <Logo appKey={app.key} />
-            <span className="pf-promo-name">{app.name}</span>
-            <span className="pf-promo-desc">{app.description}</span>
-            <span className="pf-promo-cta">
-              Khám phá {app.name} <ArrowRightOutlined />
-            </span>
-          </a>
-        ))}
-      </div>
-    </Modal>
+    <>
+      {minimized && !open && (
+        <button type="button" className="pf-promo-fab" onClick={() => setOpen(true)} aria-label="Mở giới thiệu các sản phẩm khác" title="Khám phá hệ sinh thái của chúng tôi">
+          {OTHER_APPS.map((app) => (
+            <Logo key={app.key} appKey={app.key} className="pf-promo-fab-logo" />
+          ))}
+        </button>
+      )}
+      <Modal open={open} onCancel={close} footer={null} centered width={620} rootClassName="pf-promo" destroyOnHidden aria-label="Khám phá hệ sinh thái của chúng tôi">
+        <Typography.Title level={3} className="pf-promo-title">
+          Khám phá hệ sinh thái của chúng tôi
+        </Typography.Title>
+        <p className="pf-promo-lead">Ngoài PaperFinder, hãy khám phá thêm các công cụ hỗ trợ công việc và sáng tạo nội dung.</p>
+        <div className="pf-promo-grid">
+          {OTHER_APPS.map((app) => (
+            <a key={app.key} className="pf-promo-card" href={app.url} target="_blank" rel="noopener noreferrer" style={{ '--accent': ACCENT[app.key] } as CSSProperties}>
+              <Logo appKey={app.key} />
+              <span className="pf-promo-name">{app.name}</span>
+              <span className="pf-promo-desc">{app.description}</span>
+              <span className="pf-promo-cta">
+                Khám phá {app.name} <ArrowRightOutlined />
+              </span>
+            </a>
+          ))}
+        </div>
+      </Modal>
+    </>
   );
 }
