@@ -25,9 +25,10 @@ interface Props {
 export function SearchForm({ searching, disabled, available, onSearch, onCancel }: Props) {
   const [multi, setMulti] = useState(false);
   const [text, setText] = useState('');
-  const [chosenSources, setChosenSources] = useState<SourceId[]>(DEFAULT_SOURCES);
+  // null = chưa chọn thủ công -> dùng TẤT CẢ nguồn đang bật (kể cả nguồn bật muộn sau khi kiểm tra kết nối xong).
+  const [chosenSources, setChosenSources] = useState<SourceId[] | null>(null);
   // Chỉ dùng các nguồn máy chủ đang bật (vd. Semantic Scholar cần API key).
-  const sources = chosenSources.filter((s) => available.includes(s));
+  const sources = (chosenSources ?? available).filter((s) => available.includes(s));
   const [maxResults, setMaxResults] = useState<SearchRequest['maxResults']>(50);
   const [yearFrom, setYearFrom] = useState<number | null>(null);
   const [yearTo, setYearTo] = useState<number | null>(null);
@@ -50,7 +51,7 @@ export function SearchForm({ searching, disabled, available, onSearch, onCancel 
   const error = keywordError ?? sourceError ?? yearError;
   const doiWarning =
     onlyWithDoi && sources.includes('arxiv')
-      ? 'arXiv phần lớn là preprint chưa có DOI nên sẽ trả rất ít bài khi bật “Chỉ lấy bài có DOI”. Bỏ chọn tùy chọn này để lấy đầy đủ từ arXiv.'
+      ? 'Lưu ý: nhiều bài trên arXiv là preprint chưa có DOI nên có thể ít kết quả từ arXiv. Bỏ chọn “Chỉ lấy bài có DOI” nếu muốn lấy thêm.'
       : null;
 
   const submit = () => {
@@ -164,11 +165,11 @@ export function SearchForm({ searching, disabled, available, onSearch, onCancel 
                 <>
                   {menu}
                   <div style={{ padding: 8, borderTop: '1px solid #f0f0f0' }}>
-                    <Button size="small" type="link" onClick={() => setChosenSources(available)}>
+                    <Button size="small" type="link" onClick={() => setChosenSources(null)}>
                       Chọn tất cả
                     </Button>
                     <Button size="small" type="link" onClick={() => setChosenSources(DEFAULT_SOURCES)}>
-                      Mặc định
+                      Chỉ Crossref + OpenAlex
                     </Button>
                   </div>
                 </>
@@ -201,7 +202,7 @@ export function SearchForm({ searching, disabled, available, onSearch, onCancel 
           </Col>
         </Row>
 
-        {doiWarning && <Typography.Text type="warning">{doiWarning}</Typography.Text>}
+        {doiWarning && <Typography.Text type="secondary" style={{ fontSize: 12.5 }}>{doiWarning}</Typography.Text>}
 
         <Space>
           {searching ? (
