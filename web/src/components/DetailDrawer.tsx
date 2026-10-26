@@ -154,7 +154,7 @@ export function DetailDrawer({ record, citationStyle, onClose }: { record: Paper
             )}
             <div>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                Đổi kiểu (IEEE, APA 7, Mẫu cơ bản) ở thanh phía trên bảng kết quả. Phần nào nguồn không có (tập, số, trang, biên tập viên, lần xuất bản...) sẽ bị bỏ qua; tên tạp chí/sách không in nghiêng được ở dạng văn bản thuần; hãy đối chiếu với bài gốc trước khi dùng.
+                Đổi kiểu (IEEE, APA 7, Mẫu cơ bản) ở khung “Sao chép tài liệu tham khảo” phía trên bảng kết quả. Phần nào nguồn không có (tập, số, trang, biên tập viên, lần xuất bản...) sẽ bị bỏ qua; tên tạp chí/sách không in nghiêng được ở dạng văn bản thuần; hãy đối chiếu với bài gốc trước khi dùng.
               </Typography.Text>
             </div>
           </div>

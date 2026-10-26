@@ -117,7 +117,7 @@ Khi một bài có ở nhiều nguồn, chỉ cần một nguồn xác nhận l�
 
 ## Sao chép tài liệu tham khảo
 
-Nút **Trích dẫn** (mỗi bài), **Sao chép trích dẫn (n)** (các bài đã chọn, hoặc toàn bộ kết quả đang lọc nếu chưa chọn) và mục *Tài liệu tham khảo* trong ngăn Chi tiết. Chọn kiểu ở thanh phía trên bảng (được nhớ lại ở lần mở sau):
+Nút **Trích dẫn** (mỗi bài) và khung **Sao chép tài liệu tham khảo** phía trên bảng gồm 2 bước: (1) chọn kiểu ghi, có ví dụ xem trước; (2) bấm sao chép các bài đã tick chọn, hoặc toàn bộ kết quả đang lọc nếu chưa chọn bài nào. Mục *Tài liệu tham khảo* trong ngăn Chi tiết dùng cùng kiểu đã chọn (kiểu được nhớ lại ở lần mở sau):
 
 | Kiểu | Bài tạp chí | Danh sách |
 | --- | --- | --- |

@@ -1,11 +1,12 @@
 import { BookOutlined, CopyOutlined, EyeOutlined, LinkOutlined, ReadOutlined } from '@ant-design/icons';
-import { Button, Checkbox, Input, Segmented, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd';
+import { Button, Input, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import type { SorterResult } from 'antd/es/table/interface';
 import { useMemo, useState } from 'react';
 import { SOURCE_IDS, type PaperRecord } from '../../../shared/types';
 import { copyText } from '../lib/clipboard';
-import { CITATION_STYLE_LABELS, formatReferenceList, type CitationStyle } from '../lib/citation';
+import { formatReferenceList, type CitationStyle } from '../lib/citation';
+import { CitationPanel } from './CitationPanel';
 import { PdfButton } from './PdfButton';
 import {
   NO_DATA,
@@ -309,23 +310,6 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
           Hiển thị <b>{filtered.length}</b>/{allRecords.length} bài · Đã chọn <b>{selectedIds.size}</b>
         </Typography.Text>
         <Space size="small" wrap>
-          <Segmented
-            size="small"
-            value={citationStyle}
-            onChange={(v) => onCitationStyleChange(v as CitationStyle)}
-            options={(Object.keys(CITATION_STYLE_LABELS) as CitationStyle[]).map((value) => ({ value, label: CITATION_STYLE_LABELS[value] }))}
-            aria-label="Kiểu trích dẫn"
-          />
-          {citationStyle === 'basic' && (
-            <Checkbox checked={includeDoi} onChange={(e) => setIncludeDoi(e.target.checked)}>
-              Kèm DOI
-            </Checkbox>
-          )}
-          <Tooltip title="IEEE: danh sách đánh số [1], [2]...; APA 7: sắp xếp theo tên tác giả; Mẫu cơ bản: Tác giả, Tên bài, Tạp chí (tập), số, năm, trang. Có bài được chọn thì sao chép các bài đó, chưa chọn thì sao chép toàn bộ kết quả đang lọc.">
-            <Button size="small" type="primary" ghost icon={<BookOutlined />} disabled={referenceTargets.length === 0} onClick={() => void copyReferences(referenceTargets)}>
-              Sao chép trích dẫn ({referenceTargets.length})
-            </Button>
-          </Tooltip>
           <Button size="small" disabled={filtered.length === 0} onClick={() => onSelectionChange(new Set([...selectedIds, ...filtered.map((r) => r.id)]))}>
             Chọn tất cả {filtered.length} bài đang lọc
           </Button>
@@ -334,6 +318,16 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
           </Button>
         </Space>
       </div>
+
+      <CitationPanel
+        style={citationStyle}
+        onStyleChange={onCitationStyleChange}
+        includeDoi={includeDoi}
+        onIncludeDoiChange={setIncludeDoi}
+        targets={referenceTargets}
+        fromSelection={selectedRecords.length > 0}
+        onCopy={() => void copyReferences(referenceTargets)}
+      />
 
       <Table<PaperRecord>
         rowKey="id"
