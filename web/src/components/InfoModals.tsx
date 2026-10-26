@@ -33,7 +33,7 @@ const GUIDE_STEPS: { title: string; body: ReactNode }[] = [
   },
   {
     title: 'Xử lý bài nghi trùng',
-    body: 'Các bài cùng tiêu đề nhưng chưa đủ bằng chứng để tự gộp sẽ nằm ở mục “Nghi trùng cần xem”. Bấm “Xem và xử lý” để giữ cả hai hoặc loại bỏ một bản khỏi danh sách và file xuất.',
+    body: 'Các bài cùng tiêu đề nhưng chưa đủ bằng chứng để tự gộp sẽ nằm ở mục “Nghi trùng cần xem”. Bấm “Xử lý” ngay trên ô đó để giữ cả hai hoặc loại bỏ một bản khỏi danh sách và file xuất.',
   },
 ];
 

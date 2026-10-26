@@ -1,4 +1,3 @@
-import { Col, Row, Statistic } from 'antd';
 import type { ReactNode } from 'react';
 
 export interface StatItem {
@@ -8,33 +7,33 @@ export interface StatItem {
   icon?: ReactNode;
   /** Màu nhấn: mặc định là màu chủ đạo. */
   tone?: 'primary' | 'success' | 'warning';
-  /** Phần phụ dưới số liệu (vd. nút hành động). */
+  /** Phần phụ cạnh số liệu (vd. nút hành động ngắn). */
   extra?: ReactNode;
 }
 
-const TONE_COLOR: Record<NonNullable<StatItem['tone']>, string> = {
-  primary: '#1f4e79',
-  success: '#2f8f4e',
-  warning: '#b7791f',
-};
-
-/** Lưới số liệu bằng Statistic của Ant Design, tự xuống dòng theo bề rộng màn hình. */
+/**
+ * Lưới số liệu: các ô cùng kích thước, nhãn một dòng và số liệu luôn nằm cùng một hàng ngang.
+ * Số cột được CSS chọn theo số ô và bề rộng màn hình (xem `.pf-stats` trong styles.css) để không bị lẻ dòng.
+ */
 export function StatGrid({ items }: { items: StatItem[] }) {
   return (
-    <Row gutter={[16, 16]}>
+    <div className="pf-stats" data-n={items.length}>
       {items.map((item) => (
-        <Col key={item.key} flex="1 1 150px">
-          <div className="pf-stat-tile">
-            <Statistic
-              title={item.label}
-              value={item.value}
-              prefix={item.icon}
-              styles={{ content: { color: TONE_COLOR[item.tone ?? 'primary'], fontSize: 26, fontWeight: 600 } }}
-            />
+        <div key={item.key} className={`pf-stat-tile pf-stat-${item.tone ?? 'primary'}`}>
+          <div className="pf-stat-label" title={item.label}>
+            {item.label}
+          </div>
+          <div className="pf-stat-value">
+            {item.icon && (
+              <span className="pf-stat-icon" aria-hidden="true">
+                {item.icon}
+              </span>
+            )}
+            <span className="pf-stat-num">{item.value}</span>
             {item.extra}
           </div>
-        </Col>
+        </div>
       ))}
-    </Row>
+    </div>
   );
 }

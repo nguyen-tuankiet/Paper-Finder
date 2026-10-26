@@ -289,21 +289,96 @@ body {
 }
 
 /* ---------- Thống kê ---------- */
+.pf-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+/* Điện thoại (2 cột): ô lẻ cuối cùng trải hết hàng cho cân đối */
+@media (max-width: 639px) {
+  .pf-stats > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+@media (min-width: 640px) {
+  .pf-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .pf-stats[data-n='6'] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1024px) {
+  .pf-stats[data-n='6'] {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .pf-stats[data-n='7'] {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+
 .pf-stat-tile {
-  padding: 8px 10px;
-  height: 100%;
-  border-left: 3px solid var(--pf-primary-soft);
-  border-radius: 2px;
+  --tone: var(--pf-primary);
+  --tone-soft: var(--pf-primary-soft);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--pf-border);
+  border-left: 3px solid var(--tone);
+  border-radius: 10px;
+  background: #fafbfd;
+}
+.pf-stat-success {
+  --tone: #2f8f4e;
+  --tone-soft: #e6f4ea;
+}
+.pf-stat-warning {
+  --tone: #b7791f;
+  --tone-soft: #fcf1dc;
 }
 
-.pf-stat-tile .ant-statistic-title {
+.pf-stat-label {
+  overflow: hidden;
+  color: #5b6877;
   font-size: 12.5px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.pf-stat-tile .ant-statistic-content-prefix {
-  margin-inline-end: 8px;
-  font-size: 18px;
-  opacity: 0.85;
+.pf-stat-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  color: var(--tone);
+}
+
+.pf-stat-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--tone-soft);
+  font-size: 15px;
+}
+
+.pf-stat-num {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-stat-value .ant-btn {
+  margin-left: auto;
+  padding: 0;
+  height: auto;
 }
 
 /* ---------- Bảng ---------- */

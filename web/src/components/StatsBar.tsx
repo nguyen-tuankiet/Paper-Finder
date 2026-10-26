@@ -18,8 +18,8 @@ export function StatsBar({ stats, suspectedCount, freeCount, onShowSuspected }: 
     { key: 'doi', label: 'Có DOI', value: stats.withDoi, icon: <LinkOutlined /> },
     { key: 'nodoi', label: 'Chưa có DOI', value: stats.withoutDoi, icon: <QuestionCircleOutlined /> },
     { key: 'free', label: 'Có bản miễn phí', value: freeCount, icon: <UnlockOutlined />, tone: 'success' },
-    { key: 'dups', label: 'Bài trùng đã loại bỏ', value: stats.duplicatesRemoved, icon: <CopyOutlined /> },
-    { key: 'sources', label: 'Nguồn truy vấn thành công', value: `${stats.sourcesSucceeded}/${stats.sourcesQueried}`, icon: <ApiOutlined /> },
+    { key: 'dups', label: 'Trùng đã loại bỏ', value: stats.duplicatesRemoved, icon: <CopyOutlined /> },
+    { key: 'sources', label: 'Nguồn thành công', value: `${stats.sourcesSucceeded}/${stats.sourcesQueried}`, icon: <ApiOutlined /> },
   ];
   if (suspectedCount > 0) {
     items.push({
@@ -29,8 +29,8 @@ export function StatsBar({ stats, suspectedCount, freeCount, onShowSuspected }: 
       icon: <WarningOutlined />,
       tone: 'warning',
       extra: (
-        <Button type="link" size="small" style={{ padding: 0 }} onClick={onShowSuspected}>
-          Xem và xử lý
+        <Button type="link" size="small" onClick={onShowSuspected} aria-label="Xem và xử lý các bài nghi trùng">
+          Xử lý
         </Button>
       ),
     });
