@@ -2,6 +2,7 @@ import { BookOutlined, DownloadOutlined, SafetyCertificateOutlined, UnlockOutlin
 import { Badge, Space, Tag, Tooltip, Typography } from 'antd';
 import type { ReactNode } from 'react';
 import type { SourcesHealthState } from '../lib/hooks';
+import { HeroIllustration } from './HeroIllustration';
 import { PageHeader } from './PageHeader';
 
 type Tone = 'success' | 'error' | 'processing';
@@ -45,20 +46,23 @@ export function Header({ health, online }: { health: SourcesHealthState; online:
   );
 
   const hero = (
-    <div>
-      <Typography.Title level={2} className="pf-hero-title">
-        Tìm bài báo khoa học từ nhiều nguồn, trong một nơi
-      </Typography.Title>
-      <Typography.Paragraph className="pf-hero-sub">
-        Tra cứu đồng thời các nguồn học thuật mở, gom kết quả, lọc theo năm và quyền truy cập, rồi xuất danh sách hoặc sao chép tài liệu tham khảo.
-      </Typography.Paragraph>
-      <Space size={[8, 8]} wrap>
-        {FEATURES.map((f) => (
-          <Tag key={f.text} variant="filled" icon={f.icon} className="pf-feature">
-            {f.text}
-          </Tag>
-        ))}
-      </Space>
+    <div className="pf-hero-grid">
+      <div className="pf-hero-copy">
+        <Typography.Title level={1} className="pf-hero-title">
+          <span className="pf-nowrap-lg">Tìm bài báo khoa học từ nhiều nguồn,</span> <span className="pf-nowrap-lg">trong <span className="pf-hero-accent">một nơi</span></span>
+        </Typography.Title>
+        <Typography.Paragraph className="pf-hero-sub">
+          Tra cứu đồng thời các nguồn học thuật mở, gom kết quả, lọc theo năm và quyền truy cập, rồi xuất danh sách hoặc sao chép tài liệu tham khảo.
+        </Typography.Paragraph>
+        <Space size={[8, 8]} wrap className="pf-hero-chips">
+          {FEATURES.map((f) => (
+            <Tag key={f.text} variant="filled" icon={f.icon} className="pf-feature">
+              {f.text}
+            </Tag>
+          ))}
+        </Space>
+      </div>
+      <HeroIllustration />
     </div>
   );
 

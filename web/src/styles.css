@@ -31,13 +31,12 @@ body {
 
 /* ---------- Đầu trang + hero ---------- */
 .pf-header {
-  background: var(--pf-primary);
+  background: var(--pf-primary-dark);
   color: #fff;
-  border-bottom: 3px solid var(--pf-primary-dark);
 }
 
 .pf-header-hero {
-  padding-bottom: 64px; /* chừa chỗ để khung tìm kiếm chồng lên */
+  padding-bottom: 60px; /* chừa chỗ để khung tìm kiếm chồng lên */
 }
 
 .pf-header-inner {
@@ -51,11 +50,79 @@ body {
   flex-wrap: wrap;
 }
 
+/* Đường phân cách mảnh giữa thanh đầu trang và hero, thụt vào theo lề nội dung */
+.pf-header-row {
+  position: relative;
+  min-height: 64px;
+}
+.pf-header-row::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
 .pf-header-inner.pf-hero {
   display: block;
-  padding-top: 24px;
-  padding-bottom: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 26px;
+  padding-bottom: 12px;
+}
+
+/* Hero hai cột: nội dung (~68%) + hình minh họa (~32%) */
+.pf-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 68fr) minmax(0, 32fr);
+  align-items: center;
+  gap: 16px 40px;
+  min-height: 190px;
+}
+
+.pf-hero-copy {
+  min-width: 0;
+}
+
+.pf-hero-art {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+  aspect-ratio: 380 / 220; /* giữ chỗ trước khi vẽ, tránh nhảy bố cục */
+  justify-self: end;
+  color: rgba(214, 235, 255, 0.72);
+}
+
+.pf-script {
+  font-family: 'Segoe Script', 'Lucida Handwriting', 'Brush Script MT', cursive;
+  font-size: 19px;
+  font-style: italic;
+}
+
+/* Chuyển động rất nhẹ (biên độ nhỏ, chu kỳ chậm), chỉ cho hình minh họa */
+.pf-float {
+  animation: pf-float 9s ease-in-out infinite;
+}
+.pf-float-slow {
+  animation-duration: 12s;
+  animation-delay: -4s;
+}
+@keyframes pf-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-float,
+  .pf-float-slow {
+    animation: none;
+  }
 }
 
 .pf-brand {
@@ -99,43 +166,66 @@ body {
 }
 
 .pf-hero-title {
-  margin: 0 0 8px !important;
+  margin: 0 0 10px !important;
+  max-width: 22em;
   color: #fff !important;
-  font-weight: 600 !important;
+  font-size: clamp(24px, 1.2rem + 1.6vw, 38px) !important;
+  font-weight: 650 !important;
+  line-height: 1.18 !important;
+  letter-spacing: -0.2px;
+  text-wrap: balance;
+}
+
+.pf-hero-accent {
+  color: #8fdcff; /* cyan nhạt, tương phản tốt trên nền navy */
+}
+
+/* Màn hình rộng: ngắt dòng tiêu đề theo cụm ý; màn hình nhỏ để trình duyệt tự xuống dòng (tránh tràn ngang) */
+@media (min-width: 1024px) {
+  .pf-nowrap-lg {
+    white-space: nowrap;
+  }
 }
 
 .pf-hero-sub {
-  max-width: 760px;
-  margin: 0 0 14px !important;
-  color: rgba(255, 255, 255, 0.85) !important;
+  max-width: 640px;
+  margin: 0 0 16px !important;
+  color: rgba(226, 240, 255, 0.9) !important;
   font-size: 15px;
+  line-height: 1.55;
+}
+
+/* Nhãn nguồn dữ liệu và chip tính năng dùng chung một kích thước, khoảng cách và kiểu bo góc */
+.pf-pill,
+.pf-feature {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .pf-feature {
-  margin: 0;
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-  font-size: 13px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.pf-feature .anticon {
+  font-size: 14px;
+  color: #8fdcff;
 }
 
 .pf-status {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 4px;
-}
-
-.pf-pill {
-  display: inline-flex;
-  align-items: center;
   gap: 6px;
-  margin: 0;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.95);
-  font-size: 12.5px;
 }
 
 /* ---------- Bố cục chính ---------- */
@@ -151,7 +241,7 @@ body {
 }
 
 .pf-main-overlap {
-  margin-top: -48px;
+  margin-top: -44px;
   position: relative;
   z-index: 1;
 }
@@ -421,12 +511,68 @@ body {
   list-style: none;
 }
 
+/* Tablet: thu nhỏ hình minh họa và khoảng cách */
+@media (max-width: 1023px) {
+  .pf-hero-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 210px);
+    gap: 12px 24px;
+    min-height: 0;
+  }
+  .pf-hero-art {
+    max-width: 210px;
+  }
+  .pf-header-inner.pf-hero {
+    padding-top: 20px;
+  }
+}
+
+/* Điện thoại: một cột, ẩn hình minh họa, nhãn nguồn cuộn ngang trong một hàng */
+@media (max-width: 640px) {
+  .pf-hero-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pf-hero-art {
+    display: none;
+  }
+  .pf-header-row {
+    row-gap: 10px;
+    padding-bottom: 12px;
+  }
+  .pf-status {
+    flex-wrap: nowrap;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .pf-status::-webkit-scrollbar {
+    display: none;
+  }
+  .pf-pill {
+    flex: none;
+  }
+  /* Chip tính năng cũng cuộn ngang một hàng để hero không quá cao */
+  .pf-hero-chips {
+    flex-wrap: nowrap !important;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .pf-hero-chips::-webkit-scrollbar {
+    display: none;
+  }
+  .pf-hero-chips .ant-space-item {
+    flex: none;
+  }
+  .pf-header-inner.pf-hero {
+    padding-top: 18px;
+  }
+}
+
 @media (max-width: 720px) {
   .pf-header-hero {
-    padding-bottom: 56px;
-  }
-  .pf-hero-title {
-    font-size: 22px !important;
+    padding-bottom: 52px;
   }
   .pf-hero-sub {
     font-size: 14px;

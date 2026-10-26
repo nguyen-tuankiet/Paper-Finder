@@ -14,7 +14,7 @@ interface Props {
 export function PageHeader({ subtitle, right, hero }: Props) {
   return (
     <header className={hero ? 'pf-header pf-header-hero' : 'pf-header'}>
-      <div className="pf-header-inner">
+      <div className="pf-header-inner pf-header-row">
         <a className="pf-brand" href="/" aria-label="PaperFinder - về trang chủ">
           <span className="pf-logo" aria-hidden="true">
             <FileTextOutlined style={{ fontSize: 20, color: '#fff' }} />
