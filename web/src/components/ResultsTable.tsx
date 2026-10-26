@@ -8,6 +8,7 @@ import { copyText } from '../lib/clipboard';
 import { formatReferenceList, type CitationStyle } from '../lib/citation';
 import type { CustomCitationConfig } from '../lib/customCitation';
 import { CitationPanel } from './CitationPanel';
+import { Panel } from './Panel';
 import { PdfButton } from './PdfButton';
 import {
   NO_DATA,
@@ -44,7 +45,7 @@ const muted = (text: string) => <Typography.Text type="secondary">{text}</Typogr
 export function AccessCell({ record }: { record: PaperRecord }) {
   if (record.isOpenAccess) {
     return (
-      <Space direction="vertical" size={4}>
+      <Space orientation="vertical" size={4}>
         <Space size={6} wrap>
           <Tooltip title="Có bản đọc miễn phí hợp pháp (truy cập mở) theo dữ liệu của nguồn.">
             <Tag color="green" style={{ marginInlineEnd: 0 }}>
@@ -65,7 +66,7 @@ export function AccessCell({ record }: { record: PaperRecord }) {
   }
   const url = publisherUrl(record);
   return (
-    <Space direction="vertical" size={4}>
+    <Space orientation="vertical" size={4}>
       <Tooltip title="Các nguồn chưa cho biết bài có bản miễn phí. Có thể phải trả phí hoặc có quyền truy cập qua thư viện, trường học.">
         <Tag style={{ marginInlineEnd: 0, whiteSpace: 'normal' }}>Chưa thấy bản miễn phí</Tag>
       </Tooltip>
@@ -224,7 +225,7 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
       width: 118,
       fixed: 'right',
       render: (_value, record) => (
-        <Space direction="vertical" size={4}>
+        <Space orientation="vertical" size={4}>
           <Button size="small" icon={<EyeOutlined />} onClick={() => onShowDetail(record)}>
             Chi tiết
           </Button>
@@ -251,11 +252,8 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
   };
 
   return (
-    <section className="pf-panel" aria-label="Bảng kết quả">
+    <Panel title="Danh sách bài báo" extra="Nhấp tên bài để mở trang gốc, nhấp DOI để mở doi.org" aria-label="Bảng kết quả">
       {contextHolder}
-      <h2 className="pf-panel-title">
-        Danh sách bài báo <small>Nhấp tên bài để mở trang gốc, nhấp DOI để mở doi.org</small>
-      </h2>
       <div className="pf-toolbar">
         <Input.Search
           allowClear
@@ -363,6 +361,6 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
           },
         }}
       />
-    </section>
+    </Panel>
   );
 }

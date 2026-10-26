@@ -21,7 +21,7 @@ export function DetailDrawer({ record, citationStyle, customCitation, onClose }:
     <Drawer open={record !== null} onClose={onClose} width={680} title="Chi tiết metadata" destroyOnClose>
       {contextHolder}
       {record && (
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <Typography.Title level={4} style={{ margin: 0 }}>
             {record.title || '(Chưa có tiêu đề)'}
           </Typography.Title>
@@ -76,7 +76,7 @@ export function DetailDrawer({ record, citationStyle, customCitation, onClose }:
             </Descriptions.Item>
             <Descriptions.Item label="Truy cập">
               {record.isOpenAccess ? (
-                <Space direction="vertical" size={4}>
+                <Space orientation="vertical" size={4}>
                   <span>
                     <Tag color="green">Miễn phí (truy cập mở)</Tag>
                     {record.oaLicense && <span>Giấy phép: {formatLicense(record.oaLicense)}</span>}
@@ -92,7 +92,7 @@ export function DetailDrawer({ record, citationStyle, customCitation, onClose }:
                   </Space>
                 </Space>
               ) : (
-                <Space direction="vertical" size={4}>
+                <Space orientation="vertical" size={4}>
                   <span>
                     <Tag>Chưa thấy bản miễn phí</Tag>
                     {record.oaStatus === 'closed' && <Typography.Text type="secondary">Nguồn ghi nhận là đóng (closed).</Typography.Text>}
@@ -109,7 +109,7 @@ export function DetailDrawer({ record, citationStyle, customCitation, onClose }:
               )}
             </Descriptions.Item>
             <Descriptions.Item label="Nguồn dữ liệu">
-              <Space direction="vertical" size={2}>
+              <Space orientation="vertical" size={2}>
                 {record.sourceRefs.length === 0
                   ? record.sources.map((s) => SOURCE_LABELS[s]).join(', ')
                   : record.sourceRefs.map((ref) => (

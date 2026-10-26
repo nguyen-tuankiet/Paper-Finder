@@ -3,6 +3,7 @@ import { Button, Checkbox, Col, Input, InputNumber, Row, Segmented, Select, Spac
 import { useState } from 'react';
 import { MAX_RESULT_OPTIONS, type SearchRequest, type SourceId } from '../../../shared/types';
 import { DEFAULT_SOURCES, SOURCE_HINTS, SOURCE_LABELS, parseKeywords } from '../lib/records';
+import { Panel } from './Panel';
 
 const EXAMPLES = [
   'Artificial intelligence in education',
@@ -76,11 +77,8 @@ export function SearchForm({ searching, disabled, available, onSearch, onCancel 
   };
 
   return (
-    <section className="pf-panel" aria-label="Tìm kiếm">
-      <h2 className="pf-panel-title">
-        Tìm kiếm tài liệu <small>Tối đa {MAX_KEYWORDS} từ khóa mỗi lần tìm</small>
-      </h2>
-      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+    <Panel title="Tìm kiếm tài liệu" extra={`Tối đa ${MAX_KEYWORDS} từ khóa mỗi lần tìm`} aria-label="Tìm kiếm" className="pf-search-card">
+      <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
         <Space wrap style={{ justifyContent: 'space-between', width: '100%' }}>
           <Typography.Text strong>Từ khóa nghiên cứu</Typography.Text>
           <Segmented
@@ -217,6 +215,6 @@ export function SearchForm({ searching, disabled, available, onSearch, onCancel 
           {disabled && !searching && <Typography.Text type="secondary">Cần có kết nối mạng để tìm kiếm.</Typography.Text>}
         </Space>
       </Space>
-    </section>
+    </Panel>
   );
 }

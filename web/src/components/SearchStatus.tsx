@@ -3,12 +3,13 @@ import { Alert, Button, Empty, Progress, Space, Typography } from 'antd';
 import type { SearchResult, SourceId } from '../../../shared/types';
 import type { SearchPhase, SourceProgress } from '../lib/hooks';
 import { SOURCE_LABELS } from '../lib/records';
+import { Panel } from './Panel';
 
 /** Hiển thị tiến độ theo từng nguồn trong lúc đang tìm kiếm / tải thêm kết quả. */
 export function SearchProgress({ sources, progress }: { sources: SourceId[]; progress: Partial<Record<SourceId, SourceProgress>> }) {
   return (
-    <section className="pf-panel" aria-live="polite" aria-label="Tiến độ tìm kiếm">
-      <Space direction="vertical" style={{ width: '100%' }} size="middle">
+    <Panel aria-live="polite" aria-label="Tiến độ tìm kiếm">
+      <Space orientation="vertical" style={{ width: '100%' }} size="middle">
         <Typography.Text strong>
           <LoadingOutlined /> Đang tìm kiếm và tải kết quả...
         </Typography.Text>
@@ -34,7 +35,7 @@ export function SearchProgress({ sources, progress }: { sources: SourceId[]; pro
         })}
         <Typography.Text type="secondary">Có thể bấm “Hủy tìm kiếm” bất cứ lúc nào.</Typography.Text>
       </Space>
-    </section>
+    </Panel>
   );
 }
 
@@ -44,7 +45,7 @@ export function SourceAlerts({ result }: { result: SearchResult }) {
   if (problems.length === 0) return null;
   const allFailed = result.sources.every((s) => s.state === 'error');
   return (
-    <Space direction="vertical" style={{ width: '100%' }}>
+    <Space orientation="vertical" style={{ width: '100%' }}>
       {problems.map((source) => {
         const messages = [...new Set(source.errors.map((e) => e.message))];
         const failedKeywords = source.errors.map((e) => e.keyword);
@@ -92,12 +93,12 @@ export function EmptyState({ phase, error, hasResult, onRetry }: { phase: Search
   }
   if (phase === 'idle' && !hasResult) {
     return (
-      <section className="pf-panel">
+      <Panel>
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description="Nhập từ khóa nghiên cứu và bấm “Tìm bài báo”. Kết quả lấy trực tiếp từ các nguồn học thuật bạn chọn."
         />
-      </section>
+      </Panel>
     );
   }
   return null;
@@ -107,7 +108,7 @@ export function NoResults({ result }: { result: SearchResult }) {
   const allFailed = result.sources.every((s) => s.state === 'error');
   if (allFailed) return null; // đã có cảnh báo lỗi riêng cho từng nguồn
   return (
-    <section className="pf-panel">
+    <Panel>
       <Empty
         image={Empty.PRESENTED_IMAGE_SIMPLE}
         description={
@@ -118,6 +119,6 @@ export function NoResults({ result }: { result: SearchResult }) {
           </span>
         }
       />
-    </section>
+    </Panel>
   );
 }

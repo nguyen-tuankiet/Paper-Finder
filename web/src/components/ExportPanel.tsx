@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { ExportFormat, PaperRecord } from '../../../shared/types';
 import { exportRecords } from '../lib/api';
 import { exportFileName } from '../lib/records';
+import { Panel } from './Panel';
 
 type Scope = 'filtered' | 'selected' | 'all';
 
@@ -39,12 +40,9 @@ export function ExportPanel({ allRecords, filtered, selectedIds, online }: Props
   };
 
   return (
-    <section className="pf-panel" aria-label="Xuất dữ liệu">
+    <Panel title="Xuất danh sách" extra="Excel (.xlsx) hoặc CSV, đầy đủ mọi dòng" aria-label="Xuất dữ liệu">
       {contextHolder}
-      <h2 className="pf-panel-title">
-        Xuất danh sách <small>Excel (.xlsx) hoặc CSV, đầy đủ mọi dòng</small>
-      </h2>
-      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="small" style={{ width: '100%' }}>
         <Space size="large" wrap align="center">
           <Radio.Group value={scope} onChange={(e) => setScope(e.target.value as Scope)}>
             <Radio value="filtered">Kết quả đang lọc ({filtered.length})</Radio>
@@ -71,6 +69,6 @@ export function ExportPanel({ allRecords, filtered, selectedIds, online }: Props
         )}
         {scope === 'selected' && selected.length === 0 && <Alert type="info" showIcon message="Chưa chọn bài nào. Tick các dòng trong bảng để chọn bài cần xuất." />}
       </Space>
-    </section>
+    </Panel>
   );
 }

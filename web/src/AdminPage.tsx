@@ -1,7 +1,11 @@
-import { LogoutOutlined, ReloadOutlined } from '@ant-design/icons';
-import { Alert, Button, Form, Input, Segmented, Space, Table, Typography } from 'antd';
+import { ExportOutlined, FileSearchOutlined, LogoutOutlined, ReloadOutlined, SearchOutlined, TeamOutlined } from '@ant-design/icons';
+import { Alert, Button, Form, Input, Layout, Segmented, Space, Table, Typography } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 import type { UsageDay, UsageReport, UsageSourceRow } from '../../shared/types';
+import { AppFooter } from './components/AppFooter';
+import { PageHeader } from './components/PageHeader';
+import { Panel } from './components/Panel';
+import { StatGrid } from './components/StatGrid';
 import { UsageChart } from './components/UsageChart';
 import { ApiError, fetchUsageReport } from './lib/api';
 
@@ -49,8 +53,8 @@ function LoginForm({ onLogin }: { onLogin: (password: string) => Promise<string 
   };
 
   return (
-    <section className="pf-panel" style={{ maxWidth: 420, margin: '40px auto', width: '100%' }}>
-      <h2 className="pf-panel-title">Đăng nhập quản trị</h2>
+    <div style={{ maxWidth: 420, margin: '40px auto', width: '100%' }}>
+    <Panel title="Đăng nhập quản trị">
       <Form layout="vertical" onFinish={() => void submit()}>
         <Form.Item label="Mật khẩu quản trị" validateStatus={error ? 'error' : undefined} help={error ?? undefined}>
           <Input.Password autoFocus autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy} />
@@ -59,7 +63,8 @@ function LoginForm({ onLogin }: { onLogin: (password: string) => Promise<string 
           Đăng nhập
         </Button>
       </Form>
-    </section>
+    </Panel>
+    </div>
   );
 }
 
@@ -145,42 +150,24 @@ function Dashboard({ password, onLogout }: { password: string; onLogout: () => v
             }
           />
 
-          <section className="pf-panel pf-stats" aria-label="Tổng quan">
-            <div className="pf-stat">
-              <div className="pf-stat-label">Người dùng hôm nay</div>
-              <div className="pf-stat-value">{fmt.format(report.today.visitors)}</div>
-            </div>
-            <div className="pf-stat">
-              <div className="pf-stat-label">Lượt tìm hôm nay</div>
-              <div className="pf-stat-value">{fmt.format(report.today.searches)}</div>
-            </div>
-            <div className="pf-stat">
-              <div className="pf-stat-label">Tổng người dùng</div>
-              <div className="pf-stat-value">{fmt.format(report.allTime.visitors)}</div>
-            </div>
-            <div className="pf-stat">
-              <div className="pf-stat-label">Tổng lượt tìm</div>
-              <div className="pf-stat-value">{fmt.format(report.allTime.searches)}</div>
-            </div>
-            <div className="pf-stat">
-              <div className="pf-stat-label">Tổng lượt xuất file</div>
-              <div className="pf-stat-value">{fmt.format(report.allTime.exports)}</div>
-            </div>
-            <div className="pf-stat">
-              <div className="pf-stat-label">Bài trung bình mỗi lượt tìm</div>
-              <div className="pf-stat-value">{fmt.format(report.allTime.averageResultsPerSearch)}</div>
-            </div>
-          </section>
+          <Panel aria-label="Tổng quan">
+            <StatGrid
+              items={[
+                { key: 'v-today', label: 'Người dùng hôm nay', value: fmt.format(report.today.visitors), icon: <TeamOutlined /> },
+                { key: 's-today', label: 'Lượt tìm hôm nay', value: fmt.format(report.today.searches), icon: <SearchOutlined /> },
+                { key: 'v-all', label: 'Tổng người dùng', value: fmt.format(report.allTime.visitors), icon: <TeamOutlined /> },
+                { key: 's-all', label: 'Tổng lượt tìm', value: fmt.format(report.allTime.searches), icon: <SearchOutlined /> },
+                { key: 'e-all', label: 'Tổng lượt xuất file', value: fmt.format(report.allTime.exports), icon: <ExportOutlined />, tone: 'success' },
+                { key: 'avg', label: 'Bài trung bình mỗi lượt tìm', value: fmt.format(report.allTime.averageResultsPerSearch), icon: <FileSearchOutlined /> },
+              ]}
+            />
+          </Panel>
 
-          <section className="pf-panel">
-            <h2 className="pf-panel-title">
-              Theo thời gian <small>{report.daily.length} ngày gần nhất (múi giờ {report.timezone})</small>
-            </h2>
+          <Panel title="Theo thời gian" extra={`${report.daily.length} ngày gần nhất (múi giờ ${report.timezone})`}>
             <UsageChart days={report.daily} />
-          </section>
+          </Panel>
 
-          <section className="pf-panel">
-            <h2 className="pf-panel-title">Tổng hợp</h2>
+          <Panel title="Tổng hợp">
             <Table
               size="small"
               pagination={false}
@@ -197,10 +184,9 @@ function Dashboard({ password, onLogout }: { password: string; onLogout: () => v
             <Typography.Paragraph type="secondary" style={{ margin: '12px 0 0', fontSize: 12.5 }}>
               Tìm kiếm thành công/lỗi/hủy toàn bộ: {report.allTime.completed} / {report.allTime.failed} / {report.allTime.cancelled}.
             </Typography.Paragraph>
-          </section>
+          </Panel>
 
-          <section className="pf-panel">
-            <h2 className="pf-panel-title">Theo nguồn dữ liệu</h2>
+          <Panel title="Theo nguồn dữ liệu">
             <Table<UsageSourceRow>
               size="small"
               pagination={false}
@@ -216,10 +202,9 @@ function Dashboard({ password, onLogout }: { password: string; onLogout: () => v
                 { title: 'Tỷ lệ lỗi', key: 'rate', align: 'right', render: (_v, row) => percent(row.failed, row.used) },
               ]}
             />
-          </section>
+          </Panel>
 
-          <section className="pf-panel">
-            <h2 className="pf-panel-title">Chi tiết theo ngày</h2>
+          <Panel title="Chi tiết theo ngày">
             <Table<UsageDay>
               size="small"
               rowKey="date"
@@ -228,7 +213,7 @@ function Dashboard({ password, onLogout }: { password: string; onLogout: () => v
               pagination={{ pageSize: 10, hideOnSinglePage: true }}
               scroll={{ x: 640 }}
             />
-          </section>
+          </Panel>
 
           <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: 0 }}>
             “Người dùng” là số thiết bị/mạng khác nhau (mã băm một chiều của địa chỉ IP và trình duyệt); một người dùng nhiều thiết bị hoặc nhiều người chung một mạng có thể bị đếm lệch. Hệ thống không lưu địa chỉ IP, từ khóa hay nội dung tìm kiếm. Bắt đầu ghi từ {new Date(report.trackingSince).toLocaleString('vi-VN')}; cập nhật lúc {new Date(report.generatedAt).toLocaleTimeString('vi-VN')}; giữ tối đa {report.retentionDays} ngày.
@@ -259,23 +244,17 @@ export default function AdminPage() {
   }, []);
 
   return (
-    <div className="pf-app">
-      <header className="pf-header">
-        <div className="pf-header-inner">
-          <div className="pf-brand">
-            <div>
-              <Typography.Title level={3} className="pf-brand-title">
-                PaperFinder · Quản trị
-              </Typography.Title>
-              <span className="pf-brand-sub">Thống kê sử dụng</span>
-            </div>
-          </div>
+    <Layout className="pf-layout">
+      <PageHeader
+        subtitle="Quản trị · Thống kê sử dụng"
+        right={
           <a href="/" style={{ color: 'rgba(255,255,255,0.9)', fontSize: 13 }}>
             ← Về trang tìm kiếm
           </a>
-        </div>
-      </header>
-      <main className="pf-main">{password ? <Dashboard password={password} onLogout={logout} /> : <LoginForm onLogin={login} />}</main>
-    </div>
+        }
+      />
+      <Layout.Content className="pf-main">{password ? <Dashboard password={password} onLogout={logout} /> : <LoginForm onLogin={login} />}</Layout.Content>
+      <AppFooter />
+    </Layout>
   );
 }

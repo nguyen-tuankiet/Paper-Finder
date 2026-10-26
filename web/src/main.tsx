@@ -16,10 +16,15 @@ createRoot(document.getElementById('root')!).render(
       theme={{
         token: {
           colorPrimary: '#1f4e79',
-          borderRadius: 4,
+          borderRadius: 6,
+          colorBgLayout: '#f3f5f9',
           fontFamily: "'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif",
         },
-        components: { Table: { headerBg: '#f3f5f8' } },
+        components: {
+          Table: { headerBg: '#f3f5f8' },
+          Layout: { bodyBg: '#f3f5f9', footerBg: '#ffffff', footerPadding: '28px 16px 18px' },
+          Card: { headerFontSize: 15 },
+        },
       }}
     >
       {isAdmin ? <AdminPage /> : <App />}

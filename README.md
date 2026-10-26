@@ -2,6 +2,10 @@
 
 Tìm kiếm và quản lý tài liệu khoa học: nhập từ khóa → lấy bài báo **thật** từ nhiều nguồn học thuật → chuẩn hóa, loại trùng → lọc/sắp xếp/chọn → xuất **Excel (.xlsx)** hoặc **CSV**.
 
+## Giao diện
+
+Giao diện dùng Ant Design 6: `Layout` (đầu trang có hero, nội dung, chân trang), `Card` cho các khung nội dung (`web/src/components/Panel.tsx`), `Statistic` cho lưới thống kê, nút "lên đầu trang". Tên tác giả, liên kết GitHub, danh sách "Ứng dụng khác của tác giả" và các liên kết nguồn dữ liệu ở chân trang nằm trong **một file dễ sửa: `web/src/lib/author.ts`**. Các liên kết ngoài đều mở ở tab mới với `rel="noopener noreferrer"`.
+
 ## Nguồn dữ liệu
 
 | Nguồn | Thế mạnh | Cần key? | Giới hạn backend áp dụng |

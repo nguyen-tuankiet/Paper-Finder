@@ -1,12 +1,14 @@
 :root {
   --pf-primary: #1f4e79;
+  --pf-primary-dark: #173d5f;
   --pf-primary-soft: #eaf1f8;
-  --pf-bg: #f4f6f9;
+  --pf-bg: #f3f5f9;
   --pf-border: #e3e7ed;
   --pf-text: #1f2933;
   --pf-muted: #6b7785;
-  --pf-radius: 8px;
-  --pf-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --pf-radius: 10px;
+  --pf-shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 4px 12px rgba(16, 24, 40, 0.04);
+  --pf-max: 1360px;
 }
 
 * {
@@ -22,17 +24,26 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ---------- Header ---------- */
+.pf-layout {
+  min-height: 100vh;
+  background: var(--pf-bg);
+}
+
+/* ---------- Đầu trang + hero ---------- */
 .pf-header {
   background: var(--pf-primary);
   color: #fff;
-  border-bottom: 3px solid #17405f;
+  border-bottom: 3px solid var(--pf-primary-dark);
+}
+
+.pf-header-hero {
+  padding-bottom: 64px; /* chừa chỗ để khung tìm kiếm chồng lên */
 }
 
 .pf-header-inner {
-  max-width: 1360px;
+  max-width: var(--pf-max);
   margin: 0 auto;
-  padding: 16px;
+  padding: 14px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -40,10 +51,22 @@ body {
   flex-wrap: wrap;
 }
 
+.pf-header-inner.pf-hero {
+  display: block;
+  padding-top: 24px;
+  padding-bottom: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
 .pf-brand {
   display: flex;
   align-items: center;
   gap: 12px;
+  color: #fff;
+  text-decoration: none;
+}
+.pf-brand:hover {
+  color: #fff;
 }
 
 .pf-logo {
@@ -51,9 +74,16 @@ body {
   height: 40px;
   flex: none;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.16);
   display: grid;
   place-items: center;
+}
+
+.pf-logo-sm {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--pf-primary);
 }
 
 .pf-brand-title {
@@ -68,73 +98,84 @@ body {
   font-size: 13px;
 }
 
+.pf-hero-title {
+  margin: 0 0 8px !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+}
+
+.pf-hero-sub {
+  max-width: 760px;
+  margin: 0 0 14px !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-size: 15px;
+}
+
+.pf-feature {
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 13px;
+}
+
 .pf-status {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 8px;
+  gap: 6px 4px;
 }
 
 .pf-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  margin: 0;
   padding: 3px 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.12);
-  font-size: 12.5px;
   color: rgba(255, 255, 255, 0.95);
-  white-space: nowrap;
+  font-size: 12.5px;
 }
 
-.pf-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #8c97a3;
-}
-.pf-dot-ok {
-  background: #52d68a;
-}
-.pf-dot-err {
-  background: #ff7875;
-}
-.pf-dot-wait {
-  background: #ffc069;
-}
-
-/* ---------- Layout ---------- */
+/* ---------- Bố cục chính ---------- */
 .pf-main {
-  max-width: 1360px;
+  flex: 1 0 auto;
+  width: 100%;
+  max-width: var(--pf-max);
   margin: 0 auto;
-  padding: 20px 16px 40px;
+  padding: 20px 16px 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.pf-panel {
-  background: #fff;
+.pf-main-overlap {
+  margin-top: -48px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Khung nội dung (Card của Ant Design) */
+.pf-card {
   border: 1px solid var(--pf-border);
   border-radius: var(--pf-radius);
   box-shadow: var(--pf-shadow);
-  padding: 20px;
 }
 
-.pf-panel-title {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0 0 14px;
+.pf-card > .ant-card-head {
+  min-height: 50px;
+  padding: 0 20px;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.pf-card > .ant-card-head .ant-card-head-title {
   font-size: 15px;
   font-weight: 600;
-  color: var(--pf-text);
 }
 
-.pf-panel-title small {
-  font-size: 12.5px;
-  font-weight: 400;
-  color: var(--pf-muted);
+.pf-card > .ant-card-body {
+  padding: 20px;
 }
 
 .pf-label {
@@ -158,43 +199,21 @@ body {
 }
 
 /* ---------- Thống kê ---------- */
-.pf-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  padding: 0;
-  overflow: hidden;
+.pf-stat-tile {
+  padding: 8px 10px;
+  height: 100%;
+  border-left: 3px solid var(--pf-primary-soft);
+  border-radius: 2px;
 }
 
-.pf-stat {
-  padding: 16px 20px;
-  border-right: 1px solid var(--pf-border);
-}
-.pf-stat:last-child {
-  border-right: 0;
-}
-
-.pf-stat-label {
+.pf-stat-tile .ant-statistic-title {
   font-size: 12.5px;
-  color: var(--pf-muted);
 }
 
-.pf-stat-value {
-  margin-top: 2px;
-  font-size: 26px;
-  line-height: 1.2;
-  font-weight: 600;
-  color: var(--pf-primary);
-  font-variant-numeric: tabular-nums;
-}
-
-.pf-stat-warn .pf-stat-value {
-  color: #b7791f;
-}
-
-.pf-stat .ant-btn {
-  margin-top: 6px;
-  padding: 0;
-  height: auto;
+.pf-stat-tile .ant-statistic-content-prefix {
+  margin-inline-end: 8px;
+  font-size: 18px;
+  opacity: 0.85;
 }
 
 /* ---------- Bảng ---------- */
@@ -219,28 +238,22 @@ body {
   margin-bottom: 10px;
   padding: 8px 12px;
   background: var(--pf-primary-soft);
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 13px;
 }
 
-/* Khu vực sao chép tài liệu tham khảo */
+/* Khu vực sao chép tài liệu tham khảo (mặc định thu gọn một dòng) */
 .pf-cite {
   margin-bottom: 12px;
-  padding: 12px 14px;
+  padding: 8px 12px;
   border: 1px solid var(--pf-border);
-  border-radius: 6px;
+  border-radius: 8px;
   background: #fafbfc;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-}
-
-.pf-cite {
-  padding: 8px 12px;
   gap: 8px;
 }
 
-/* Dòng thu gọn: tiêu đề + chọn kiểu + nút sao chép + nút mở rộng */
 .pf-cite-bar {
   display: flex;
   flex-wrap: wrap;
@@ -306,7 +319,7 @@ body {
   padding: 8px 10px;
   background: #fff;
   border: 1px dashed var(--pf-border);
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 13px;
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -363,24 +376,71 @@ body {
 
 .pf-dup-side {
   border: 1px solid var(--pf-border);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 10px;
   font-size: 13px;
   overflow-wrap: anywhere;
 }
 
+/* ---------- Ứng dụng khác của tác giả ---------- */
+.pf-apps {
+  padding: 8px 16px 28px;
+}
+
+.pf-apps-inner {
+  max-width: var(--pf-max);
+  margin: 0 auto;
+}
+
+.pf-app-card {
+  height: 100%;
+  border: 1px solid var(--pf-border);
+  border-radius: var(--pf-radius);
+  box-shadow: var(--pf-shadow);
+}
+
+/* ---------- Chân trang ---------- */
+.pf-footer {
+  flex: none;
+  padding: 28px 16px 18px;
+  background: #fff;
+  border-top: 1px solid var(--pf-border);
+}
+
+.pf-footer-inner {
+  max-width: var(--pf-max);
+  margin: 0 auto;
+}
+
+.pf-footer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
 @media (max-width: 720px) {
+  .pf-header-hero {
+    padding-bottom: 56px;
+  }
+  .pf-hero-title {
+    font-size: 22px !important;
+  }
+  .pf-hero-sub {
+    font-size: 14px;
+  }
+  .pf-main-overlap {
+    margin-top: -40px;
+  }
   .pf-dup-pair {
     grid-template-columns: 1fr;
   }
-  .pf-panel {
+  .pf-card > .ant-card-body {
     padding: 14px;
   }
-  .pf-stat {
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--pf-border);
-  }
-  .pf-stat-value {
-    font-size: 22px;
+  .pf-card > .ant-card-head {
+    padding: 0 14px;
   }
 }

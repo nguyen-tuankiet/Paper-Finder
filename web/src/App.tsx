@@ -1,7 +1,9 @@
-import { Alert, Typography } from 'antd';
+import { Alert, FloatButton, Layout, Typography } from 'antd';
 import { useMemo, useState } from 'react';
 import type { PaperRecord, SearchRequest, SearchResult } from '../../shared/types';
+import { AppFooter } from './components/AppFooter';
 import { DetailDrawer } from './components/DetailDrawer';
+import { OtherApps } from './components/OtherApps';
 import { DuplicatesModal, type DuplicateAction } from './components/DuplicatesModal';
 import { ExportPanel } from './components/ExportPanel';
 import { Header } from './components/Header';
@@ -99,15 +101,18 @@ export default function App() {
   const searching = search.phase === 'searching';
 
   return (
-    <div className="pf-app">
+    <Layout className="pf-layout">
       <Header health={health} online={online} />
-      <main className="pf-main">
+      <Layout.Content className="pf-main pf-main-overlap">
         {!online && <Alert type="warning" showIcon message="Bạn đang offline" description="Không thể tìm kiếm hoặc xuất file cho tới khi có mạng trở lại. Kết quả đã tải vẫn xem được." />}
         <SearchForm searching={searching} disabled={!online} available={available} onSearch={run} onCancel={search.cancel} />
         {searching && lastRequest && <SearchProgress sources={lastRequest.sources} progress={search.progress} />}
         <EmptyState phase={search.phase} error={search.error} hasResult={search.result !== null} onRetry={lastRequest ? () => run(lastRequest) : undefined} />
         {search.result && search.phase === 'done' && <ResultsView key={search.result.finishedAt} result={search.result} online={online} />}
-      </main>
-    </div>
+      </Layout.Content>
+      <OtherApps />
+      <AppFooter />
+      <FloatButton.BackTop visibilityHeight={600} tooltip="Lên đầu trang" />
+    </Layout>
   );
 }
