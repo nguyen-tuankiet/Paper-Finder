@@ -1,4 +1,4 @@
-import { BookOutlined, DownloadOutlined, SafetyCertificateOutlined, UnlockOutlined } from '@ant-design/icons';
+import { BookOutlined, DownloadOutlined, ProfileOutlined, SafetyCertificateOutlined, UnlockOutlined } from '@ant-design/icons';
 import { Badge, Space, Tag, Tooltip, Typography } from 'antd';
 import type { ReactNode } from 'react';
 import type { SourcesHealthState } from '../lib/hooks';
@@ -22,6 +22,7 @@ const FEATURES = [
   { icon: <UnlockOutlined />, text: 'Lọc bản đọc miễn phí, tải PDF' },
   { icon: <DownloadOutlined />, text: 'Xuất Excel / CSV' },
   { icon: <BookOutlined />, text: 'Trích dẫn IEEE · APA 7 · tự soạn' },
+  { icon: <ProfileOutlined />, text: 'Dán DOI, nhận tham khảo chuẩn' },
 ];
 
 export function Header({ health, online, account }: { health: SourcesHealthState; online: boolean; account?: ReactNode }) {

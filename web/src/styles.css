@@ -1259,3 +1259,45 @@ body {
     font-size: 12px;
   }
 }
+
+/* ---------- Chuyển chế độ: tìm theo từ khóa / dán danh sách DOI ---------- */
+.pf-mode.ant-segmented {
+  align-self: flex-start;
+  max-width: 100%;
+  background: #fff;
+  box-shadow: var(--pf-shadow);
+}
+.pf-mode-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.pf-mode-tag.ant-tag {
+  margin: 0;
+  font-size: 11px;
+  line-height: 18px;
+}
+.pf-mode-pane[hidden] {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .pf-mode.ant-segmented {
+    width: 100%;
+  }
+  .pf-mode-label {
+    padding: 2px 0;
+    gap: 4px;
+    font-size: 13px;
+  }
+  /* Màn hình hẹp: chỉ giữ biểu tượng khóa, bỏ chữ để không bị cắt */
+  .pf-mode-tag-text {
+    display: none;
+  }
+  .pf-mode-tag.ant-tag .anticon {
+    margin-inline-end: 0;
+  }
+}

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PaperRecord, SearchRequest, SearchResult } from '../../shared/types';
 import { AccountMenu } from './components/AccountMenu';
 import { DoiLookupPanel } from './components/DoiLookupPanel';
+import { ModeTabs, type SearchMode } from './components/ModeTabs';
 import type { LookupResponse } from './lib/api';
 import { AppFooter } from './components/AppFooter';
 import { HistoryDrawer } from './components/HistoryDrawer';
@@ -109,11 +110,13 @@ export default function App() {
   const account = useAccount();
   const [lastRequest, setLastRequest] = useState<SearchRequest | null>(null);
   const [lookup, setLookup] = useState<LookupResponse | null>(null);
+  const [mode, setMode] = useState<SearchMode>('search');
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const available = health.status === 'ready' ? health.sources.map((s) => s.source) : DEFAULT_SOURCES;
 
   const run = (request: SearchRequest) => {
+    setMode('search');
     setLastRequest(request);
     search.start(request);
   };
@@ -148,12 +151,20 @@ export default function App() {
       <Layout.Content className="pf-main pf-main-overlap">
         {!online && <Alert type="warning" showIcon title="Bạn đang offline" description="Không thể tìm kiếm hoặc xuất file cho tới khi có mạng trở lại. Kết quả đã tải vẫn xem được." />}
         <QuotaBar />
-        <SearchForm searching={searching} disabled={!online} available={available} onSearch={run} onCancel={search.cancel} />
-        {searching && lastRequest && <SearchProgress sources={lastRequest.sources} progress={search.progress} />}
-        <EmptyState phase={search.phase} error={search.error} errorCode={search.errorCode} hasResult={search.result !== null} onRetry={lastRequest && search.errorCode !== 'quota_exceeded' && search.errorCode !== 'results_limit' ? () => run(lastRequest) : undefined} />
-        {search.result && search.phase === 'done' && <ResultsView key={search.result.finishedAt} result={search.result} online={online} />}
-        <DoiLookupPanel onResult={setLookup} />
-        {lookup && (
+        <ModeTabs value={mode} onChange={setMode} />
+        {/* Cả hai khung luôn được giữ trong trang (chỉ ẩn) để chuyển tab không làm mất chữ đã gõ. */}
+        <div hidden={mode !== 'search'} className="pf-mode-pane">
+          <SearchForm searching={searching} disabled={!online} available={available} onSearch={run} onCancel={search.cancel} />
+        </div>
+        <div hidden={mode !== 'doi'} className="pf-mode-pane">
+          <DoiLookupPanel onResult={setLookup} />
+        </div>
+        {mode === 'search' && searching && lastRequest && <SearchProgress sources={lastRequest.sources} progress={search.progress} />}
+        {mode === 'search' && (
+          <EmptyState phase={search.phase} error={search.error} errorCode={search.errorCode} hasResult={search.result !== null} onRetry={lastRequest && search.errorCode !== 'quota_exceeded' && search.errorCode !== 'results_limit' ? () => run(lastRequest) : undefined} />
+        )}
+        {mode === 'search' && search.result && search.phase === 'done' && <ResultsView key={search.result.finishedAt} result={search.result} online={online} />}
+        {mode === 'doi' && lookup && (
           <>
             <Alert
               type={lookup.notFound.length + lookup.failed.length + lookup.invalid.length > 0 ? 'warning' : 'success'}
