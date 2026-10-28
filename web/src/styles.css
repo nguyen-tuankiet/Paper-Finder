@@ -1094,50 +1094,6 @@ body {
   padding: 0 6px;
 }
 
-.pf-pro-benefits {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0 0 18px;
-  padding: 0;
-  list-style: none;
-}
-.pf-pro-benefits .anticon {
-  margin-right: 6px;
-  color: #2f8f4e;
-}
-
-.pf-plan-group.ant-radio-group {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  width: 100%;
-}
-.pf-plan.ant-radio-button-wrapper {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  height: auto;
-  padding: 12px 14px;
-  line-height: 1.3;
-  border-radius: 10px;
-  border-inline-start-width: 1px;
-}
-.pf-plan.ant-radio-button-wrapper::before {
-  display: none;
-}
-.pf-plan-name {
-  display: block;
-  min-height: 22px;
-  font-size: 13.5px;
-}
-.pf-plan-price {
-  display: block;
-  font-size: 20px;
-  font-weight: 650;
-}
-
 @media (max-width: 640px) {
   /* Điện thoại: logo + nút tài khoản cùng một hàng, dải trạng thái nguồn xuống hàng dưới */
   .pf-brand {
@@ -1159,10 +1115,7 @@ body {
   .pf-account-email {
     display: none;
   }
-  .pf-plan-group.ant-radio-group {
-    grid-template-columns: 1fr;
-  }
-  .pf-quota-actions {
+    .pf-quota-actions {
     margin-left: 0;
   }
 }
@@ -1180,12 +1133,129 @@ body {
   padding-top: 0;
 }
 
-/* Ba thời hạn mua gói: 7 ngày / 1 tháng / 1 năm */
-.pf-plan-group.ant-radio-group {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+/* ---------- So sánh hạng Tiêu chuẩn và Pro cạnh nhau ---------- */
+.pf-cmp-period {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
 }
+
+.pf-cmp {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 10px;
+}
+.pf-cmp-row {
+  display: contents;
+}
+
+.pf-cmp-head {
+  height: 100%;
+  padding: 12px 12px 14px;
+  border: 1px solid var(--pf-border);
+  border-radius: 12px;
+  background: #fafbfd;
+  text-align: center;
+}
+.pf-cmp-head.is-recommended {
+  border-color: var(--pf-primary);
+  background: #f3f8fd;
+  box-shadow: 0 0 0 1px var(--pf-primary);
+}
+.pf-cmp-name {
+  font-size: 17px;
+  font-weight: 650;
+}
+.pf-cmp-tag {
+  min-height: 24px;
+}
+.pf-cmp-price {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--pf-primary-dark);
+}
+.pf-cmp-per {
+  margin-bottom: 4px;
+  color: #5b6877;
+  font-size: 12px;
+}
+.pf-cmp-save {
+  min-height: 26px;
+  margin-bottom: 6px;
+}
+.pf-cmp-save .ant-tag {
+  margin-inline-end: 0;
+  font-size: 11.5px;
+  white-space: normal;
+}
+.pf-cmp-until {
+  margin-top: 6px;
+  color: #2f8f4e;
+  font-size: 12px;
+}
+
+.pf-cmp-label,
+.pf-cmp-cell {
+  display: flex;
+  align-items: center;
+  min-height: 46px;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--pf-border);
+  font-size: 13.5px;
+}
+.pf-cmp-label {
+  color: #3d4a5c;
+}
+.pf-cmp-cell {
+  justify-content: center;
+  text-align: center;
+}
+.pf-cmp-cell.is-better {
+  background: #f1faf4;
+  font-weight: 600;
+}
+.pf-cmp-yes {
+  color: #2f8f4e;
+  font-size: 17px;
+}
+.pf-cmp-no {
+  color: #b8c0cc;
+}
+
 @media (max-width: 640px) {
-  .pf-plan-group.ant-radio-group {
-    grid-template-columns: 1fr;
+  .pf-cmp {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 6px;
+  }
+  .pf-cmp-head {
+    padding: 8px 6px 10px;
+  }
+  .pf-cmp-name {
+    font-size: 15px;
+  }
+  .pf-cmp-price {
+    font-size: 19px;
+  }
+  .pf-cmp-per {
+    font-size: 10.5px;
+  }
+  .pf-cmp-save .ant-tag {
+    font-size: 10.5px;
+    padding-inline: 3px;
+  }
+  .pf-cmp-head .ant-btn {
+    padding-inline: 4px;
+    font-size: 12.5px;
+    white-space: normal;
+    height: auto;
+    min-height: 32px;
+  }
+  .pf-cmp-label,
+  .pf-cmp-cell {
+    min-height: 40px;
+    padding: 6px 3px;
+    font-size: 12px;
   }
 }
