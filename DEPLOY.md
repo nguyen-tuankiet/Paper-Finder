@@ -105,7 +105,7 @@ Trên Render, thêm biến môi trường:
 | `SESSION_SECRET` | chuỗi ngẫu nhiên ≥ 32 ký tự: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 | `DATABASE_URL` | xem 7.1 |
 | `FREE_DAILY_SEARCHES`, `GUEST_DAILY_SEARCHES` | tùy chọn, mặc định 10 và 3 |
-| `PRICE_STANDARD_WEEK/MONTH/YEAR`, `PRICE_PRO_WEEK/MONTH/YEAR` | tùy chọn, giá VND từng gói (mặc định 15.000 / 39.000 / 299.000 và 29.000 / 79.000 / 599.000) |
+| `PRICE_STANDARD_WEEK/MONTH/YEAR`, `PRICE_PRO_WEEK/MONTH/YEAR` | tùy chọn, giá VND từng gói (mặc định 10.000 / 29.000 / 119.000 và 20.000 / 49.000 / 229.000) |
 
 Đổi `SESSION_SECRET` sẽ đăng xuất mọi người. Nên bật `TRUST_PROXY=1` (đã có trong `render.yaml`) để cookie đăng nhập có cờ `Secure` và giới hạn theo IP đúng.
 
