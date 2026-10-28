@@ -133,32 +133,60 @@ export interface SourceHealth {
 
 export type ExportFormat = 'xlsx' | 'csv' | 'bibtex' | 'ris';
 
-/** Định dạng chỉ dành cho gói Pro (nhập vào Zotero, Mendeley, EndNote). */
-export const PRO_EXPORT_FORMATS: readonly ExportFormat[] = ['bibtex', 'ris'];
+/** Định dạng nhập vào Zotero, Mendeley, EndNote; chỉ hạng Pro mới xuất được. */
+export const REFERENCE_EXPORT_FORMATS: readonly ExportFormat[] = ['bibtex', 'ris'];
 
-// ---------- Tài khoản, gói và thanh toán ----------
+// ---------- Tài khoản, hạng và thanh toán ----------
 
-export type PlanId = 'month' | 'year';
+/** Khách (chưa đăng nhập) < miễn phí (đã đăng nhập) < Tiêu chuẩn < Pro. */
+export type Tier = 'guest' | 'free' | 'standard' | 'pro';
+/** Hạng có thể mua. */
+export type PaidTier = 'standard' | 'pro';
+export const PAID_TIERS: readonly PaidTier[] = ['standard', 'pro'];
+
+export type PlanPeriod = 'week' | 'month' | 'year';
+export const PLAN_PERIODS: readonly PlanPeriod[] = ['week', 'month', 'year'];
+
+/** Quyền lợi của một hạng. Máy chủ là nơi quyết định; giao diện chỉ hiển thị và khóa nút theo đây. */
+export interface Entitlements {
+  tier: Tier;
+  /** Tên hiển thị (Khách, Miễn phí, Tiêu chuẩn, Pro). */
+  label: string;
+  /** Số lượt tìm mỗi ngày (mỗi từ khóa một lượt). null = không giới hạn. */
+  dailySearches: number | null;
+  /** Số kết quả tối đa cho mỗi từ khóa trên mỗi nguồn. */
+  maxResultsPerSource: MaxResults;
+  /** Số dòng tối đa mỗi file Excel/CSV: 0 = không xuất được, null = không giới hạn. */
+  exportRows: number | null;
+  /** Xuất BibTeX/RIS. */
+  referenceExport: boolean;
+  /** Số bài tối đa trong thư viện cá nhân (0 = không có thư viện). */
+  libraryMax: number;
+  /** Số lần tìm gần nhất được lưu trong lịch sử (0 = không lưu). */
+  historyMax: number;
+}
 
 export interface PlanOption {
-  id: PlanId;
+  tier: PaidTier;
+  period: PlanPeriod;
+  /** Tên thời hạn: "7 ngày", "1 tháng", "1 năm". */
   label: string;
   days: number;
   priceVnd: number;
 }
 
 export interface PlansResponse {
-  /** Máy chủ có bật tài khoản hay không (cần SESSION_SECRET). Tắt = không giới hạn lượt tìm như trước. */
+  /** Máy chủ có bật tài khoản hay không (cần SESSION_SECRET). Tắt = không giới hạn gì như trước. */
   accountsEnabled: boolean;
   /** Đã cấu hình cổng thanh toán PayOS hay chưa. */
   billingEnabled: boolean;
-  freeDailySearches: number;
-  guestDailySearches: number;
+  /** Quyền lợi của cả bốn hạng, để giao diện hiển thị bảng so sánh. */
+  tiers: Entitlements[];
   plans: PlanOption[];
 }
 
 export interface QuotaInfo {
-  /** null = không giới hạn (gói Pro hoặc tính năng tài khoản đang tắt). */
+  /** null = không giới hạn (hạng trả phí hoặc tính năng tài khoản đang tắt). */
   limit: number | null;
   used: number;
   remaining: number | null;
@@ -168,7 +196,10 @@ export interface QuotaInfo {
 
 export interface AccountUser {
   email: string;
-  isPro: boolean;
+  /** Hạng đang hiệu lực: free, standard hoặc pro. */
+  tier: Exclude<Tier, 'guest'>;
+  /** Hạn của từng hạng (ISO) hoặc null nếu chưa từng mua. Hạng Tiêu chuẩn tạm dừng đếm khi Pro đang hiệu lực. */
+  standardUntil: string | null;
   proUntil: string | null;
   createdAt: string;
 }
@@ -176,6 +207,9 @@ export interface AccountUser {
 export interface MeResponse {
   accountsEnabled: boolean;
   user: AccountUser | null;
+  /** Hạng hiện tại (guest khi chưa đăng nhập). */
+  tier: Tier;
+  entitlements: Entitlements;
   quota: QuotaInfo;
 }
 
@@ -192,6 +226,11 @@ export interface LibraryItem {
   folder: string;
   savedAt: string;
   record: PaperRecord;
+}
+
+export interface CheckoutRequest {
+  tier: PaidTier;
+  period: PlanPeriod;
 }
 
 export interface CheckoutResponse {

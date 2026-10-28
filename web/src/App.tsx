@@ -1,5 +1,5 @@
 import { Alert, FloatButton, Layout, Typography } from 'antd';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PaperRecord, SearchRequest, SearchResult } from '../../shared/types';
 import { AccountMenu } from './components/AccountMenu';
 import { AppFooter } from './components/AppFooter';
@@ -114,6 +114,22 @@ export default function App() {
     if (search.phase === 'done' || search.phase === 'failed' || search.phase === 'cancelled') void refresh();
   }, [search.phase, refresh]);
 
+  // Khách bị chặn vì hết lượt rồi đăng nhập: tự chạy lại đúng lần tìm đó, không bắt gõ lại.
+  const pendingAfterLogin = useRef<SearchRequest | null>(null);
+  useEffect(() => {
+    if (search.phase === 'failed' && search.errorCode === 'quota_exceeded' && !account.user && lastRequest) pendingAfterLogin.current = lastRequest;
+  }, [search.phase, search.errorCode, account.user, lastRequest]);
+  const { user: signedInUser } = account;
+  useEffect(() => {
+    if (signedInUser && pendingAfterLogin.current) {
+      const request = pendingAfterLogin.current;
+      pendingAfterLogin.current = null;
+      run(request);
+    }
+    // run chỉ gọi setState/start ổn định; chỉ chạy lại khi người dùng đăng nhập.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedInUser]);
+
   return (
     <Layout className="pf-layout">
       <Header health={health} online={online} account={<AccountMenu onOpenLibrary={() => setLibraryOpen(true)} onOpenHistory={() => setHistoryOpen(true)} />} />
@@ -122,7 +138,7 @@ export default function App() {
         <QuotaBar />
         <SearchForm searching={searching} disabled={!online} available={available} onSearch={run} onCancel={search.cancel} />
         {searching && lastRequest && <SearchProgress sources={lastRequest.sources} progress={search.progress} />}
-        <EmptyState phase={search.phase} error={search.error} errorCode={search.errorCode} hasResult={search.result !== null} onRetry={lastRequest && search.errorCode !== 'quota_exceeded' ? () => run(lastRequest) : undefined} />
+        <EmptyState phase={search.phase} error={search.error} errorCode={search.errorCode} hasResult={search.result !== null} onRetry={lastRequest && search.errorCode !== 'quota_exceeded' && search.errorCode !== 'results_limit' ? () => run(lastRequest) : undefined} />
         {search.result && search.phase === 'done' && <ResultsView key={search.result.finishedAt} result={search.result} online={online} />}
       </Layout.Content>
       <AppFooter />

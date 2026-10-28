@@ -1179,3 +1179,13 @@ body {
 .pf-row:first-child {
   padding-top: 0;
 }
+
+/* Ba thời hạn mua gói: 7 ngày / 1 tháng / 1 năm */
+.pf-plan-group.ant-radio-group {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 640px) {
+  .pf-plan-group.ant-radio-group {
+    grid-template-columns: 1fr;
+  }
+}

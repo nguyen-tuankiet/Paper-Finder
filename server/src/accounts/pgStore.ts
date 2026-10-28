@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
-import type { HistoryEntry, LibraryItem, PaperRecord, PlanId, SearchRequest } from '../../../shared/types.js';
-import type { AccountStore, OrderRow, OrderStatus, SaveToLibraryResult, UserRow } from './types.js';
+import type { HistoryEntry, LibraryItem, PaidTier, PaperRecord, SearchRequest } from '../../../shared/types.js';
+import { PERIOD_DAYS, applyPurchase, parsePlanKey, tierOf, type PlanKey } from './plans.js';
+import type { AccountCounts, AccountStore, OrderRow, OrderStatus, SaveToLibraryResult, UserRow } from './types.js';
 
-const DAY_MS = 86_400_000;
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 const iso = (value: Date | string | null): string | null => (value === null ? null : new Date(value).toISOString());
 
@@ -13,9 +13,11 @@ const SCHEMA = [
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     session_version INTEGER NOT NULL DEFAULT 1,
+    standard_until TIMESTAMPTZ,
     pro_until TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL
   )`,
+  'ALTER TABLE pf_users ADD COLUMN IF NOT EXISTS standard_until TIMESTAMPTZ',
   `CREATE TABLE IF NOT EXISTS pf_usage (
     user_id TEXT NOT NULL,
     day TEXT NOT NULL,
@@ -54,6 +56,7 @@ interface UserDbRow {
   email: string;
   password_hash: string;
   session_version: number;
+  standard_until: Date | string | null;
   pro_until: Date | string | null;
   created_at: Date | string;
 }
@@ -73,6 +76,7 @@ const toUser = (r: UserDbRow): UserRow => ({
   email: r.email,
   passwordHash: r.password_hash,
   sessionVersion: Number(r.session_version),
+  standardUntil: iso(r.standard_until),
   proUntil: iso(r.pro_until),
   createdAt: iso(r.created_at) ?? new Date().toISOString(),
 });
@@ -80,7 +84,7 @@ const toUser = (r: UserDbRow): UserRow => ({
 const toOrder = (r: OrderDbRow): OrderRow => ({
   orderCode: Number(r.order_code),
   userId: r.user_id,
-  plan: r.plan as PlanId,
+  plan: r.plan as PlanKey,
   amount: Number(r.amount),
   status: r.status as OrderStatus,
   createdAt: iso(r.created_at) ?? new Date().toISOString(),
@@ -107,7 +111,7 @@ export class PgAccountStore implements AccountStore {
   async createUser(email: string, passwordHash: string): Promise<UserRow | null> {
     try {
       const result = await this.pool.query<UserDbRow>(
-        'INSERT INTO pf_users (id, email, password_hash, session_version, pro_until, created_at) VALUES ($1, $2, $3, 1, NULL, $4) RETURNING *',
+        'INSERT INTO pf_users (id, email, password_hash, session_version, standard_until, pro_until, created_at) VALUES ($1, $2, $3, 1, NULL, NULL, $4) RETURNING *',
         [randomUUID(), normalizeEmail(email), passwordHash, new Date()],
       );
       return result.rows[0] ? toUser(result.rows[0]) : null;
@@ -148,12 +152,12 @@ export class PgAccountStore implements AccountStore {
     return Number(result.rows[0]?.count ?? 0);
   }
 
-  async grantPro(userId: string, days: number, now: Date): Promise<UserRow | null> {
+  async grantPlan(userId: string, tier: PaidTier, days: number, now: Date): Promise<UserRow | null> {
     const user = await this.getUserById(userId);
     if (!user) return null;
-    const until = extend(user.proUntil, days, now);
-    await this.pool.query('UPDATE pf_users SET pro_until = $2 WHERE id = $1', [userId, until]);
-    return { ...user, proUntil: until.toISOString() };
+    const next = { ...user, ...applyPurchase(user, tier, days, now) };
+    await this.pool.query('UPDATE pf_users SET standard_until = $2, pro_until = $3 WHERE id = $1', [userId, next.standardUntil ? new Date(next.standardUntil) : null, next.proUntil ? new Date(next.proUntil) : null]);
+    return next;
   }
 
   async createOrder(order: OrderRow): Promise<void> {
@@ -177,14 +181,15 @@ export class PgAccountStore implements AccountStore {
     await this.pool.query("UPDATE pf_orders SET status = $2 WHERE order_code = $1 AND status <> 'paid'", [orderCode, status]);
   }
 
-  async settleOrder(orderCode: number, days: number, now: Date) {
+  async settleOrder(orderCode: number, now: Date) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
       // Câu UPDATE có điều kiện chỉ thành công với MỘT lần gọi: các lần còn lại (webhook lặp, trang quay lại) thấy đơn đã paid.
       const claimed = await client.query<OrderDbRow>("UPDATE pf_orders SET status = 'paid', paid_at = $2 WHERE order_code = $1 AND status <> 'paid' RETURNING *", [orderCode, now]);
       const existing = claimed.rows[0] ?? (await client.query<OrderDbRow>('SELECT * FROM pf_orders WHERE order_code = $1', [orderCode])).rows[0];
-      if (!existing) {
+      const plan = existing ? parsePlanKey(existing.plan) : null;
+      if (!existing || !plan) {
         await client.query('ROLLBACK');
         return null;
       }
@@ -196,9 +201,8 @@ export class PgAccountStore implements AccountStore {
       let user = toUser(userRow);
       const activated = claimed.rows.length > 0;
       if (activated) {
-        const until = extend(user.proUntil, days, now);
-        await client.query('UPDATE pf_users SET pro_until = $2 WHERE id = $1', [user.id, until]);
-        user = { ...user, proUntil: until.toISOString() };
+        user = { ...user, ...applyPurchase(user, plan.tier, PERIOD_DAYS[plan.period], now) };
+        await client.query('UPDATE pf_users SET standard_until = $2, pro_until = $3 WHERE id = $1', [user.id, user.standardUntil ? new Date(user.standardUntil) : null, user.proUntil ? new Date(user.proUntil) : null]);
       }
       await client.query('COMMIT');
       return { order: toOrder(existing), user, activated };
@@ -210,13 +214,14 @@ export class PgAccountStore implements AccountStore {
     }
   }
 
-  async counts(now: Date) {
-    const users = await this.pool.query<{ n: string | number }>('SELECT COUNT(*) AS n FROM pf_users');
-    const pro = await this.pool.query<{ n: string | number }>('SELECT COUNT(*) AS n FROM pf_users WHERE pro_until > $1', [now]);
+  async counts(now: Date): Promise<AccountCounts> {
+    const all = await this.pool.query<UserDbRow>('SELECT * FROM pf_users');
+    const tiers = all.rows.map((r) => tierOf(toUser(r), now));
     const orders = await this.pool.query<{ n: string | number; total: string | number | null }>("SELECT COUNT(*) AS n, SUM(amount) AS total FROM pf_orders WHERE status = 'paid'");
     return {
-      users: Number(users.rows[0]?.n ?? 0),
-      activePro: Number(pro.rows[0]?.n ?? 0),
+      users: all.rows.length,
+      activeStandard: tiers.filter((t) => t === 'standard').length,
+      activePro: tiers.filter((t) => t === 'pro').length,
       paidOrders: Number(orders.rows[0]?.n ?? 0),
       revenueVnd: Number(orders.rows[0]?.total ?? 0),
     };
@@ -277,9 +282,4 @@ export class PgAccountStore implements AccountStore {
   async close(): Promise<void> {
     await this.pool.end();
   }
-}
-
-function extend(current: string | null, days: number, now: Date): Date {
-  const base = current ? Math.max(now.getTime(), new Date(current).getTime()) : now.getTime();
-  return new Date(base + days * DAY_MS);
 }

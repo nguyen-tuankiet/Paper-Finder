@@ -1,4 +1,5 @@
-import type { HistoryEntry, LibraryItem, PlanId } from '../../../shared/types.js';
+import type { HistoryEntry, LibraryItem, PaidTier } from '../../../shared/types.js';
+import type { PlanKey } from './plans.js';
 
 export interface UserRow {
   id: string;
@@ -6,7 +7,8 @@ export interface UserRow {
   passwordHash: string;
   /** Tăng khi đổi mật khẩu để vô hiệu mọi phiên đăng nhập cũ. */
   sessionVersion: number;
-  /** ISO. null = chưa từng mua Pro. Pro còn hiệu lực khi thời điểm này ở tương lai. */
+  /** ISO. null = chưa từng mua hạng đó. Xem `tierOf` / `applyPurchase` trong plans.ts. */
+  standardUntil: string | null;
   proUntil: string | null;
   createdAt: string;
 }
@@ -17,7 +19,8 @@ export interface OrderRow {
   /** Mã đơn gửi cho PayOS (số nguyên dương, duy nhất). */
   orderCode: number;
   userId: string;
-  plan: PlanId;
+  /** Hạng và thời hạn đã mua, vd. "pro:month". */
+  plan: PlanKey;
   amount: number;
   status: OrderStatus;
   createdAt: string;
@@ -25,6 +28,14 @@ export interface OrderRow {
 }
 
 export type SaveToLibraryResult = 'saved' | 'exists' | 'full';
+
+export interface AccountCounts {
+  users: number;
+  activeStandard: number;
+  activePro: number;
+  paidOrders: number;
+  revenueVnd: number;
+}
 
 /**
  * Kho dữ liệu tài khoản. Có hai cách cài đặt: bộ nhớ + file JSON (mặc định, mất dữ liệu khi máy chủ không có ổ đĩa bền)
@@ -41,17 +52,17 @@ export interface AccountStore {
   /** Cộng (hoặc trừ, khi delta âm) lượt tìm trong ngày; trả về tổng mới (không bao giờ âm). */
   addUsage(userId: string, day: string, delta: number): Promise<number>;
   getUsage(userId: string, day: string): Promise<number>;
-  /** Cộng thêm `days` ngày Pro, tính từ thời điểm lớn hơn giữa bây giờ và hạn hiện tại. */
-  grantPro(userId: string, days: number, now: Date): Promise<UserRow | null>;
+  /** Cộng `days` ngày cho hạng `tier` theo quy tắc cộng dồn của `applyPurchase`. */
+  grantPlan(userId: string, tier: PaidTier, days: number, now: Date): Promise<UserRow | null>;
   createOrder(order: OrderRow): Promise<void>;
   getOrder(orderCode: number): Promise<OrderRow | null>;
   setOrderStatus(orderCode: number, status: 'pending' | 'cancelled'): Promise<void>;
   /**
-   * Đánh dấu đơn đã thanh toán và cộng Pro MỘT LẦN DUY NHẤT dù được gọi nhiều lần (webhook + trang quay lại).
+   * Đánh dấu đơn đã thanh toán và cộng thời hạn MỘT LẦN DUY NHẤT dù được gọi nhiều lần (webhook + trang quay lại).
    * Trả `activated: false` nếu đơn đã được xử lý trước đó.
    */
-  settleOrder(orderCode: number, days: number, now: Date): Promise<{ order: OrderRow; user: UserRow; activated: boolean } | null>;
-  counts(now: Date): Promise<{ users: number; activePro: number; paidOrders: number; revenueVnd: number }>;
+  settleOrder(orderCode: number, now: Date): Promise<{ order: OrderRow; user: UserRow; activated: boolean } | null>;
+  counts(now: Date): Promise<AccountCounts>;
 
   listLibrary(userId: string): Promise<LibraryItem[]>;
   saveToLibrary(userId: string, item: LibraryItem, maxItems: number): Promise<SaveToLibraryResult>;
@@ -63,5 +74,3 @@ export interface AccountStore {
 
   close(): Promise<void>;
 }
-
-export const isProActive = (user: Pick<UserRow, 'proUntil'>, now: Date): boolean => user.proUntil !== null && new Date(user.proUntil).getTime() > now.getTime();

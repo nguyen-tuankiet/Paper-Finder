@@ -6,8 +6,9 @@ import type {
   LibraryItem,
   MeResponse,
   PaperRecord,
+  PaidTier,
   PaymentStatusResponse,
-  PlanId,
+  PlanPeriod,
   PlansResponse,
   SearchEvent,
   SearchRequest,
@@ -121,7 +122,12 @@ export async function fetchUsageReport(password: string, days: number, signal?: 
 }
 
 /** Yêu cầu backend tạo file rồi tải về bằng tên file `fileName`. Ném ApiError có `code` 'unauthorized' / 'pro_required' với BibTeX/RIS. */
-export async function exportRecords(format: ExportFormat, records: PaperRecord[], fileName: string): Promise<void> {
+export interface ExportOutcome {
+  /** Gói hiện tại chỉ cho xuất một phần: số dòng đã xuất và tổng số dòng. */
+  truncated?: { rows: number; total: number };
+}
+
+export async function exportRecords(format: ExportFormat, records: PaperRecord[], fileName: string): Promise<ExportOutcome> {
   const response = await request('/api/export', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -129,6 +135,8 @@ export async function exportRecords(format: ExportFormat, records: PaperRecord[]
   });
   if (!response.ok) throw await httpError(response);
   saveBlob(await response.blob(), fileName);
+  const cut = /^(\d+)\/(\d+)$/.exec(response.headers.get('x-export-truncated') ?? '');
+  return cut ? { truncated: { rows: Number(cut[1]), total: Number(cut[2]) } } : {};
 }
 
 // ---------- Tài khoản, gói Pro, thanh toán ----------
@@ -150,7 +158,7 @@ export const registerAccount = (email: string, password: string) => post<{ user:
 export const loginAccount = (email: string, password: string) => post<{ user: AccountUser }>('/api/auth/login', { email, password });
 export const logoutAccount = () => post<{ ok: true }>('/api/auth/logout', {});
 export const changePassword = (currentPassword: string, newPassword: string) => post<{ ok: true }>('/api/auth/change-password', { currentPassword, newPassword });
-export const startCheckout = (plan: PlanId) => post<CheckoutResponse>('/api/billing/checkout', { plan });
+export const startCheckout = (tier: PaidTier, period: PlanPeriod) => post<CheckoutResponse>('/api/billing/checkout', { tier, period });
 export const confirmPayment = (orderCode: number) => post<PaymentStatusResponse>('/api/billing/confirm', { orderCode });
 
 export const fetchLibrary = () => json<LibraryItem[]>('/api/library');

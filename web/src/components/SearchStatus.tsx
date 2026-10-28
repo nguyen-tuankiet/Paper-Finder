@@ -97,16 +97,28 @@ export function EmptyState({
       <Alert
         type="warning"
         showIcon
-        title="Đã hết lượt tìm miễn phí hôm nay"
+        title="Đã hết lượt tìm hôm nay"
         description={error}
         action={
           <Space>
             {!account.user && <Button onClick={() => account.openAuth('register')}>Đăng nhập</Button>}
-            <Button type="primary" onClick={() => account.openUpgrade('Gói Pro không giới hạn lượt tìm mỗi ngày.')}>
-              Nâng cấp Pro
+            <Button type="primary" onClick={() => account.openUpgrade('Hạng Tiêu chuẩn trở lên tìm không giới hạn lượt mỗi ngày.')}>
+              Mua gói
             </Button>
           </Space>
         }
+      />
+    );
+  }
+  if (phase === 'failed' && errorCode === 'results_limit') {
+    // Chọn quá số kết quả mỗi nguồn của hạng hiện tại (thường chỉ xảy ra khi giao diện chưa kịp cập nhật).
+    return (
+      <Alert
+        type="warning"
+        showIcon
+        title="Hạng hiện tại không lấy được nhiều kết quả như vậy"
+        description={error}
+        action={account.user ? <Button type="primary" onClick={() => account.openUpgrade('Hạng cao hơn lấy được nhiều kết quả hơn mỗi nguồn.')}>Mua gói</Button> : <Button type="primary" onClick={() => account.openAuth('register')}>Đăng nhập</Button>}
       />
     );
   }

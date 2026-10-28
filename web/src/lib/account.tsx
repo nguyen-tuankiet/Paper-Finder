@@ -1,9 +1,9 @@
 import { message } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { AccountUser, PlansResponse, QuotaInfo } from '../../../shared/types';
+import type { AccountUser, Entitlements, PaidTier, PlansResponse, QuotaInfo, Tier } from '../../../shared/types';
 import { AuthModal, type AuthTab } from '../components/AuthModal';
 import { UpgradeModal } from '../components/UpgradeModal';
-import { AccountContext, type AccountApi } from './accountContext';
+import { AccountContext, UNRESTRICTED, type AccountApi } from './accountContext';
 import { ApiError, confirmPayment, fetchMe, fetchPlans, loginAccount, logoutAccount, registerAccount } from './api';
 
 const UNLIMITED: QuotaInfo = { limit: null, used: 0, remaining: null, resetsAt: null };
@@ -15,10 +15,12 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [user, setUser] = useState<AccountUser | null>(null);
+  const [tier, setTier] = useState<Tier>('guest');
+  const [entitlements, setEntitlements] = useState<Entitlements>(UNRESTRICTED);
   const [quota, setQuota] = useState<QuotaInfo>(UNLIMITED);
   const [plans, setPlans] = useState<PlansResponse | null>(null);
   const [auth, setAuth] = useState<{ open: boolean; tab: AuthTab }>({ open: false, tab: 'login' });
-  const [upgrade, setUpgrade] = useState<{ open: boolean; reason?: string }>({ open: false });
+  const [upgrade, setUpgrade] = useState<{ open: boolean; reason?: string; tier?: PaidTier }>({ open: false });
   const [messageApi, messageHolder] = message.useMessage();
   const handledReturn = useRef(false);
 
@@ -27,6 +29,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       const me = await fetchMe();
       setEnabled(me.accountsEnabled);
       setUser(me.user);
+      setTier(me.tier);
+      setEntitlements(me.entitlements);
       setQuota(me.quota);
     } catch {
       /* mất mạng hoặc máy chủ lỗi: giữ trạng thái cũ, các phần khác của trang sẽ tự báo lỗi kết nối */
@@ -66,19 +70,19 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           if (result.status === 'paid') {
             hide();
             await refresh();
-            void messageApi.success('Thanh toán thành công. Gói Pro đã được kích hoạt!');
+            void messageApi.success('Thanh toán thành công. Gói của bạn đã được kích hoạt!');
             return;
           }
           if (result.status === 'cancelled' || result.status === 'unknown') break;
           await wait(3000);
         }
         hide();
-        void messageApi.warning('Chưa nhận được xác nhận thanh toán. Nếu bạn đã chuyển khoản, Pro sẽ tự kích hoạt trong ít phút; hãy tải lại trang sau đó.', 8);
+        void messageApi.warning('Chưa nhận được xác nhận thanh toán. Nếu bạn đã chuyển khoản, gói sẽ tự kích hoạt trong ít phút; hãy tải lại trang sau đó.', 8);
       } catch (error) {
         hide();
         if (error instanceof ApiError && error.status === 401) {
           setAuth({ open: true, tab: 'login' });
-          void messageApi.warning('Hãy đăng nhập lại để hoàn tất kích hoạt gói Pro.', 6);
+          void messageApi.warning('Hãy đăng nhập lại để hoàn tất kích hoạt gói.', 6);
         } else {
           void messageApi.error('Không kiểm tra được trạng thái thanh toán. Vui lòng tải lại trang sau ít phút.', 6);
         }
@@ -113,7 +117,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       ready,
       enabled,
       user,
-      isPro: Boolean(user?.isPro),
+      tier,
+      entitlements,
       quota,
       plans,
       refresh,
@@ -121,9 +126,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       register,
       logout,
       openAuth: (tab = 'login') => setAuth({ open: true, tab }),
-      openUpgrade: (reason) => setUpgrade({ open: true, reason }),
+      openUpgrade: (reason, wanted) => setUpgrade({ open: true, reason, tier: wanted }),
     }),
-    [ready, enabled, user, quota, plans, refresh, login, register, logout],
+    [ready, enabled, user, tier, entitlements, quota, plans, refresh, login, register, logout],
   );
 
   return (
@@ -133,7 +138,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       {enabled && (
         <>
           <AuthModal open={auth.open} tab={auth.tab} onTabChange={(tab) => setAuth({ open: true, tab })} onClose={() => setAuth((s) => ({ ...s, open: false }))} />
-          <UpgradeModal open={upgrade.open} reason={upgrade.reason} onClose={() => setUpgrade((s) => ({ ...s, open: false }))} onNeedLogin={() => setAuth({ open: true, tab: 'register' })} />
+          <UpgradeModal open={upgrade.open} reason={upgrade.reason} initialTier={upgrade.tier} onClose={() => setUpgrade((s) => ({ ...s, open: false }))} onNeedLogin={() => setAuth({ open: true, tab: 'register' })} />
         </>
       )}
     </AccountContext.Provider>

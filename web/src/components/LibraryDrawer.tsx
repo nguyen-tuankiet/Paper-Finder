@@ -16,7 +16,7 @@ function authorLine(item: LibraryItem): string {
   return extra > 0 ? `${shown} và ${extra} tác giả khác` : shown;
 }
 
-/** Thư viện cá nhân (Pro): bài đã lưu, lọc theo thư mục, sao chép trích dẫn, xóa, xuất BibTeX/RIS/Excel. */
+/** Thư viện cá nhân (Tiêu chuẩn trở lên): bài đã lưu, lọc theo thư mục, sao chép trích dẫn, xóa, xuất BibTeX/RIS/Excel. */
 export function LibraryDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const account = useAccount();
   const [items, setItems] = useState<LibraryItem[]>([]);
@@ -42,8 +42,8 @@ export function LibraryDrawer({ open, onClose }: { open: boolean; onClose: () =>
   }, []);
 
   useEffect(() => {
-    if (open && account.isPro) void load();
-  }, [open, account.isPro, load]);
+    if (open && account.entitlements.libraryMax > 0 && account.user) void load();
+  }, [open, account.entitlements.libraryMax, account.user, load]);
 
   const folders = useMemo(() => [...new Set(items.map((i) => i.folder).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')), [items]);
   const shown = useMemo(() => {
@@ -79,13 +79,13 @@ export function LibraryDrawer({ open, onClose }: { open: boolean; onClose: () =>
       {holder}
       {!account.user ? (
         <Alert type="info" showIcon title="Đăng nhập để dùng thư viện" action={<Button size="small" onClick={() => account.openAuth('login')}>Đăng nhập</Button>} />
-      ) : !account.isPro ? (
+      ) : account.entitlements.libraryMax === 0 ? (
         <Alert
           type="info"
           showIcon
-          title="Thư viện cá nhân là tính năng của gói Pro"
-          description="Lưu bài vào thư mục riêng và dùng trên mọi thiết bị. Dữ liệu đã lưu được giữ nguyên, sẽ xem lại được khi bạn gia hạn Pro."
-          action={<Button size="small" type="primary" onClick={() => account.openUpgrade('Thư viện cá nhân dành cho gói Pro.')}>Nâng cấp</Button>}
+          title="Thư viện cá nhân dành cho hạng Tiêu chuẩn trở lên"
+          description="Lưu bài vào thư mục riêng và dùng trên mọi thiết bị. Dữ liệu đã lưu được giữ nguyên, xem lại được khi bạn mua lại gói."
+          action={<Button size="small" type="primary" onClick={() => account.openUpgrade('Thư viện cá nhân dành cho hạng Tiêu chuẩn trở lên.', 'standard')}>Mua gói</Button>}
         />
       ) : (
         <Space orientation="vertical" size="middle" style={{ width: '100%' }}>

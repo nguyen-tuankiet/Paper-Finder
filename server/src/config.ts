@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
+import type { PlanKey } from './accounts/plans.js';
 import type { LogLevel } from './logger.js';
 
 const envSchema = z.object({
@@ -38,9 +39,13 @@ const envSchema = z.object({
   ACCOUNTS_FILE: z.string().optional(),
   FREE_DAILY_SEARCHES: z.coerce.number().int().min(1).max(1000).default(10),
   GUEST_DAILY_SEARCHES: z.coerce.number().int().min(0).max(1000).default(3),
-  /** Giá gói Pro (VND). */
-  PRO_PRICE_MONTH: z.coerce.number().int().min(2000).max(100_000_000).default(49_000),
-  PRO_PRICE_YEAR: z.coerce.number().int().min(2000).max(100_000_000).default(399_000),
+  /** Giá từng gói (VND): hạng Tiêu chuẩn và Pro, mỗi hạng mua 7 ngày, 1 tháng hoặc 1 năm. PayOS yêu cầu tối thiểu 2.000đ. */
+  PRICE_STANDARD_WEEK: z.coerce.number().int().min(2000).max(100_000_000).default(15_000),
+  PRICE_STANDARD_MONTH: z.coerce.number().int().min(2000).max(100_000_000).default(39_000),
+  PRICE_STANDARD_YEAR: z.coerce.number().int().min(2000).max(100_000_000).default(299_000),
+  PRICE_PRO_WEEK: z.coerce.number().int().min(2000).max(100_000_000).default(29_000),
+  PRICE_PRO_MONTH: z.coerce.number().int().min(2000).max(100_000_000).default(79_000),
+  PRICE_PRO_YEAR: z.coerce.number().int().min(2000).max(100_000_000).default(599_000),
   /** Địa chỉ công khai của trang (https://ten-mien.com) để PayOS đưa người dùng quay lại sau thanh toán. */
   PUBLIC_BASE_URL: z.string().url().optional(),
   PAYOS_CLIENT_ID: z.string().min(1).optional(),
@@ -72,8 +77,8 @@ export interface AppConfig {
   accountsFile: string;
   freeDailySearches: number;
   guestDailySearches: number;
-  proPriceMonth: number;
-  proPriceYear: number;
+  /** Giá theo khóa gói, vd. prices['pro:month']. */
+  prices: Record<PlanKey, number>;
   publicBaseUrl?: string;
   payos?: { clientId: string; apiKey: string; checksumKey: string };
   staticDir?: string;
@@ -127,8 +132,14 @@ export function parseConfig(env: Record<string, string | undefined>, cwd = proce
     accountsFile: parsed.ACCOUNTS_FILE ? path.resolve(cwd, parsed.ACCOUNTS_FILE) : path.resolve(cwd, 'data', 'accounts.json'),
     freeDailySearches: parsed.FREE_DAILY_SEARCHES,
     guestDailySearches: parsed.GUEST_DAILY_SEARCHES,
-    proPriceMonth: parsed.PRO_PRICE_MONTH,
-    proPriceYear: parsed.PRO_PRICE_YEAR,
+    prices: {
+      'standard:week': parsed.PRICE_STANDARD_WEEK,
+      'standard:month': parsed.PRICE_STANDARD_MONTH,
+      'standard:year': parsed.PRICE_STANDARD_YEAR,
+      'pro:week': parsed.PRICE_PRO_WEEK,
+      'pro:month': parsed.PRICE_PRO_MONTH,
+      'pro:year': parsed.PRICE_PRO_YEAR,
+    },
     publicBaseUrl: parsed.PUBLIC_BASE_URL?.replace(/\/+$/, ''),
     // Chỉ bật thanh toán khi đủ cả ba giá trị và biết địa chỉ trang để PayOS trả người dùng về.
     payos:

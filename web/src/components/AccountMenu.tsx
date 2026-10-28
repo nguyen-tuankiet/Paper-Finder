@@ -67,6 +67,7 @@ export function AccountMenu({ onOpenLibrary, onOpenHistory }: Props) {
   }
 
   const user = account.user;
+  const paidUntil = user.tier === 'pro' ? user.proUntil : user.tier === 'standard' ? user.standardUntil : null;
   const items: MenuProps['items'] = [
     {
       key: 'info',
@@ -74,14 +75,14 @@ export function AccountMenu({ onOpenLibrary, onOpenHistory }: Props) {
       label: (
         <div className="pf-account-info">
           <strong>{user.email}</strong>
-          <span>{user.isPro && user.proUntil ? `Gói Pro đến ${new Date(user.proUntil).toLocaleDateString('vi-VN')}` : 'Gói miễn phí'}</span>
+          <span>{paidUntil ? `Hạng ${account.entitlements.label} đến ${new Date(paidUntil).toLocaleDateString('vi-VN')}` : 'Hạng Miễn phí'}</span>
         </div>
       ),
     },
     { type: 'divider' },
     { key: 'library', icon: <BookOutlined />, label: 'Thư viện của tôi', onClick: onOpenLibrary },
     { key: 'history', icon: <HistoryOutlined />, label: 'Lịch sử tìm kiếm', onClick: onOpenHistory },
-    { key: 'upgrade', icon: <CrownFilled style={{ color: '#d4a017' }} />, label: user.isPro ? 'Gia hạn gói Pro' : 'Nâng cấp Pro', onClick: () => account.openUpgrade() },
+    { key: 'upgrade', icon: <CrownFilled style={{ color: '#d4a017' }} />, label: paidUntil ? 'Gia hạn / đổi gói' : 'Mua gói', onClick: () => account.openUpgrade() },
     { type: 'divider' },
     { key: 'password', icon: <KeyOutlined />, label: 'Đổi mật khẩu', onClick: () => setPasswordOpen(true) },
     { key: 'logout', icon: <LogoutOutlined />, label: 'Đăng xuất', onClick: () => void account.logout() },
@@ -92,9 +93,9 @@ export function AccountMenu({ onOpenLibrary, onOpenHistory }: Props) {
       <Dropdown menu={{ items }} trigger={['click']} placement="bottomRight">
         <Button className="pf-account-btn" icon={<UserOutlined />} aria-label="Menu tài khoản">
           <span className="pf-account-email">{user.email}</span>
-          {user.isPro && (
+          {paidUntil && (
             <Tag color="gold" style={{ marginInlineEnd: 0 }} icon={<CrownFilled />}>
-              Pro
+              {account.entitlements.label}
             </Tag>
           )}
         </Button>

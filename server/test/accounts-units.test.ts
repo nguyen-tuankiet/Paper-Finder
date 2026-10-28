@@ -8,6 +8,7 @@ import { MemoryAccountStore } from '../src/accounts/memoryStore.js';
 import { hashPassword, verifyPassword } from '../src/accounts/passwords.js';
 import { PayOsClient } from '../src/accounts/payos.js';
 import { PgAccountStore } from '../src/accounts/pgStore.js';
+import { PERIOD_DAYS, applyPurchase, buildEntitlements, parsePlanKey, planKey, tierOf } from '../src/accounts/plans.js';
 import { QuotaService } from '../src/accounts/quota.js';
 import { libraryKey } from '../src/accounts/routes.js';
 import { SessionSigner, readCookie } from '../src/accounts/session.js';
@@ -30,11 +31,13 @@ describe('phiên đăng nhập', () => {
   const signer = new SessionSigner('s'.repeat(40));
   it('tạo và xác minh token', () => {
     const t = signer.create('u1', 3, 1000);
-    expect(signer.verify(t, 2000)).toEqual({ userId: 'u1', sessionVersion: 3 });
+    expect(signer.verify(t, 2000)).toMatchObject({ userId: 'u1', sessionVersion: 3 });
+    expect(signer.verify(t, 2000)?.expiresAt).toBeGreaterThan(1000 + 179 * 24 * 3600 * 1000);
   });
   it('từ chối token hết hạn, sai chữ ký, sai khóa, định dạng lạ', () => {
     const t = signer.create('u1', 1, 1000);
-    expect(signer.verify(t, 1000 + 31 * 24 * 3600 * 1000)).toBeNull();
+    expect(signer.verify(t, 1000 + 181 * 24 * 3600 * 1000)).toBeNull();
+    expect(signer.verify(t, 1000 + 170 * 24 * 3600 * 1000)).not.toBeNull();
     const [body] = t.split('.');
     expect(signer.verify(`${body}.AAAA`)).toBeNull();
     expect(new SessionSigner('k'.repeat(40)).verify(t, 2000)).toBeNull();
@@ -55,7 +58,7 @@ describe('hạn mức theo ngày', () => {
   it('đặt lại lúc nửa đêm giờ Việt Nam và tách bộ đếm theo ngày', async () => {
     let now = new Date('2026-03-10T16:30:00Z'); // 23:30 ngày 10/3 giờ VN
     const store = new MemoryAccountStore();
-    const quota = new QuotaService({ store, freeDailySearches: 2, guestDailySearches: 1, timezone: 'Asia/Ho_Chi_Minh', now: () => now });
+    const quota = new QuotaService({ store, dailySearches: (tier) => ({ guest: 1, free: 2, standard: null, pro: null })[tier], timezone: 'Asia/Ho_Chi_Minh', now: () => now });
     const guest = { kind: 'guest', key: 'g1' } as const;
 
     expect((await quota.consume(guest, 1)).ok).toBe(true);
@@ -70,8 +73,8 @@ describe('hạn mức theo ngày', () => {
   it('thành viên: kiểm tra đủ lượt trước khi trừ, hoàn lượt, Pro không giới hạn', async () => {
     const store = new MemoryAccountStore();
     const user = (await store.createUser('a@b.co', 'x'))!;
-    const quota = new QuotaService({ store, freeDailySearches: 3, guestDailySearches: 1, timezone: 'Asia/Ho_Chi_Minh' });
-    const free = { kind: 'user', userId: user.id, isPro: false } as const;
+    const quota = new QuotaService({ store, dailySearches: (tier) => ({ guest: 1, free: 3, standard: null, pro: null })[tier], timezone: 'Asia/Ho_Chi_Minh' });
+    const free = { kind: 'user', userId: user.id, tier: 'free' } as const;
 
     expect((await quota.consume(free, 2)).quota.remaining).toBe(1);
     const over = await quota.consume(free, 2);
@@ -82,12 +85,13 @@ describe('hạn mức theo ngày', () => {
     await quota.refund(free, 5);
     expect((await quota.peek(free)).used).toBe(0); // không âm
 
-    const pro = { kind: 'user', userId: user.id, isPro: true } as const;
-    expect((await quota.consume(pro, 100)).quota.limit).toBeNull();
+    for (const tier of ['standard', 'pro'] as const) {
+      expect((await quota.consume({ kind: 'user', userId: user.id, tier }, 100)).quota.limit).toBeNull();
+    }
   });
 
   it('khách hạn mức 0 phải đăng nhập', async () => {
-    const quota = new QuotaService({ store: new MemoryAccountStore(), freeDailySearches: 3, guestDailySearches: 0, timezone: 'UTC' });
+    const quota = new QuotaService({ store: new MemoryAccountStore(), dailySearches: (tier) => (tier === 'guest' ? 0 : 3), timezone: 'UTC' });
     expect((await quota.consume({ kind: 'guest', key: 'k' }, 1)).ok).toBe(false);
   });
 });
@@ -148,7 +152,7 @@ describe.each(factories)('kho tài khoản: %s', (_name, make) => {
   it('tạo người dùng, email không phân biệt hoa thường, email trùng trả null', async () => {
     const store = await make();
     const u = await store.createUser('User@Example.com', 'hash1');
-    expect(u).toMatchObject({ email: 'user@example.com', sessionVersion: 1, proUntil: null });
+    expect(u).toMatchObject({ email: 'user@example.com', sessionVersion: 1, standardUntil: null, proUntil: null });
     expect(await store.createUser('USER@example.com', 'hash2')).toBeNull();
     expect((await store.getUserByEmail('user@EXAMPLE.com'))?.id).toBe(u!.id);
     expect((await store.getUserById(u!.id))?.email).toBe('user@example.com');
@@ -176,42 +180,57 @@ describe.each(factories)('kho tài khoản: %s', (_name, make) => {
     expect(await store.getUsage(u.id, '2026-05-01')).toBe(0);
   });
 
-  it('cấp Pro cộng dồn từ hạn hiện tại hoặc từ bây giờ nếu đã hết hạn', async () => {
+  it('cấp gói cộng dồn từ hạn hiện tại hoặc từ bây giờ nếu đã hết hạn', async () => {
     const store = await make();
     const u = (await store.createUser('a@b.co', 'h'))!;
-    expect((await store.grantPro(u.id, 30, NOW))?.proUntil).toBe(day(30));
-    expect((await store.grantPro(u.id, 30, NOW))?.proUntil).toBe(day(60));
+    expect((await store.grantPlan(u.id, 'pro', 30, NOW))?.proUntil).toBe(day(30));
+    expect((await store.grantPlan(u.id, 'pro', 30, NOW))?.proUntil).toBe(day(60));
     const later = new Date(day(100));
-    expect((await store.grantPro(u.id, 10, later))?.proUntil).toBe(new Date(later.getTime() + 10 * 86_400_000).toISOString());
-    expect(await store.grantPro('khong-co', 1, NOW)).toBeNull();
+    expect((await store.grantPlan(u.id, 'pro', 10, later))?.proUntil).toBe(new Date(later.getTime() + 10 * 86_400_000).toISOString());
+    expect(await store.grantPlan('khong-co', 'pro', 1, NOW)).toBeNull();
+    expect((await store.getUserById(u.id))!.standardUntil).toBeNull();
+  });
+
+  it('cấp lẫn hai hạng lưu đủ hai hạn (Tiêu chuẩn lùi lại khi mua Pro)', async () => {
+    const store = await make();
+    const u = (await store.createUser('a@b.co', 'h'))!;
+    await store.grantPlan(u.id, 'standard', 30, NOW);
+    const after = (await store.grantPlan(u.id, 'pro', 7, NOW))!;
+    expect(after.proUntil).toBe(day(7));
+    expect(after.standardUntil).toBe(day(37));
+    const reread = (await store.getUserById(u.id))!;
+    expect([reread.proUntil, reread.standardUntil]).toEqual([day(7), day(37)]);
   });
 
   it('settleOrder chỉ kích hoạt một lần, kể cả khi gọi đồng thời', async () => {
     const store = await make();
     const u = (await store.createUser('a@b.co', 'h'))!;
-    const order: OrderRow = { orderCode: 1_700_000_000_000_123, userId: u.id, plan: 'month', amount: 49_000, status: 'pending', createdAt: NOW.toISOString(), paidAt: null };
+    const order: OrderRow = { orderCode: 1_700_000_000_000_123, userId: u.id, plan: 'standard:month', amount: 39_000, status: 'pending', createdAt: NOW.toISOString(), paidAt: null };
     await store.createOrder(order);
     expect((await store.getOrder(order.orderCode))?.status).toBe('pending');
 
-    const results = await Promise.all([store.settleOrder(order.orderCode, 30, NOW), store.settleOrder(order.orderCode, 30, NOW), store.settleOrder(order.orderCode, 30, NOW)]);
+    const results = await Promise.all([store.settleOrder(order.orderCode, NOW), store.settleOrder(order.orderCode, NOW), store.settleOrder(order.orderCode, NOW)]);
     expect(results.filter((r) => r?.activated).length).toBe(1);
     expect(results.every((r) => r?.order.status === 'paid')).toBe(true);
-    expect((await store.getUserById(u.id))?.proUntil).toBe(day(30));
+    expect((await store.getUserById(u.id))?.standardUntil).toBe(day(30));
+    expect((await store.getUserById(u.id))?.proUntil).toBeNull();
     expect((await store.getOrder(order.orderCode))?.paidAt).toBe(NOW.toISOString());
-    expect(await store.settleOrder(999, 30, NOW)).toBeNull();
+    expect(await store.settleOrder(999, NOW)).toBeNull();
 
     await store.setOrderStatus(order.orderCode, 'cancelled'); // đơn đã trả tiền không bị hủy
     expect((await store.getOrder(order.orderCode))?.status).toBe('paid');
   });
 
-  it('thống kê tài khoản', async () => {
+  it('thống kê tài khoản theo hạng', async () => {
     const store = await make();
     const a = (await store.createUser('a@b.co', 'h'))!;
-    await store.createUser('c@d.co', 'h');
-    await store.grantPro(a.id, 30, NOW);
-    await store.createOrder({ orderCode: 5, userId: a.id, plan: 'year', amount: 399_000, status: 'pending', createdAt: NOW.toISOString(), paidAt: null });
-    await store.settleOrder(5, 365, NOW);
-    expect(await store.counts(NOW)).toEqual({ users: 2, activePro: 1, paidOrders: 1, revenueVnd: 399_000 });
+    const b = (await store.createUser('c@d.co', 'h'))!;
+    await store.createUser('e@f.co', 'h');
+    await store.grantPlan(a.id, 'pro', 30, NOW);
+    await store.grantPlan(b.id, 'standard', 7, NOW);
+    await store.createOrder({ orderCode: 5, userId: a.id, plan: 'pro:year', amount: 599_000, status: 'pending', createdAt: NOW.toISOString(), paidAt: null });
+    await store.settleOrder(5, NOW);
+    expect(await store.counts(NOW)).toEqual({ users: 3, activeStandard: 1, activePro: 1, paidOrders: 1, revenueVnd: 599_000 });
   });
 
   it('thư viện: lưu, trùng cập nhật thư mục, giới hạn, xóa, tách biệt giữa người dùng', async () => {
@@ -262,11 +281,12 @@ describe('kho tài khoản dạng file', () => {
     const first = new MemoryAccountStore({ filePath: file, flushIntervalMs: 0 });
     const u = (await first.createUser('a@b.co', 'hash'))!;
     await first.addUsage(u.id, '2026-05-01', 2);
-    await first.grantPro(u.id, 30, NOW);
+    await first.grantPlan(u.id, 'pro', 30, NOW);
     await first.close();
 
     const second = new MemoryAccountStore({ filePath: file, flushIntervalMs: 0 });
     expect((await second.getUserByEmail('a@b.co'))?.proUntil).toBe(day(30));
+    expect((await second.getUserByEmail('a@b.co'))?.standardUntil).toBeNull();
     expect(await second.getUsage(u.id, '2026-05-01')).toBe(2);
     await second.close();
 
@@ -276,6 +296,67 @@ describe('kho tài khoản dạng file', () => {
     await third.createUser('x@y.co', 'h');
     await third.close();
     expect(JSON.parse(readFileSync(file, 'utf8')).users).toHaveLength(1);
+  });
+});
+
+describe('gói và quyền lợi', () => {
+  it('khóa gói: tạo và đọc lại, từ chối khóa sai', () => {
+    expect(planKey('pro', 'month')).toBe('pro:month');
+    expect(parsePlanKey('standard:year')).toEqual({ tier: 'standard', period: 'year' });
+    for (const bad of ['', 'month', 'free:month', 'pro:decade', 'pro', 'pro:month:x']) expect(parsePlanKey(bad)).toBeNull();
+    expect(PERIOD_DAYS).toEqual({ week: 7, month: 30, year: 365 });
+  });
+
+  it('hạng hiệu lực: Pro > Tiêu chuẩn > miễn phí, theo hạn còn lại', () => {
+    const now = new Date('2026-05-01T00:00:00Z');
+    const future = '2026-06-01T00:00:00Z';
+    const past = '2026-04-01T00:00:00Z';
+    expect(tierOf({ standardUntil: null, proUntil: null }, now)).toBe('free');
+    expect(tierOf({ standardUntil: future, proUntil: null }, now)).toBe('standard');
+    expect(tierOf({ standardUntil: future, proUntil: future }, now)).toBe('pro');
+    expect(tierOf({ standardUntil: future, proUntil: past }, now)).toBe('standard');
+    expect(tierOf({ standardUntil: past, proUntil: past }, now)).toBe('free');
+    expect(tierOf({ standardUntil: null, proUntil: '2026-05-01T00:00:00Z' }, now)).toBe('free'); // đúng thời điểm hết hạn
+  });
+
+  it('mua Pro khi đang có Tiêu chuẩn: Tiêu chuẩn lùi đúng bằng số ngày Pro; hết Pro thì dùng tiếp phần còn lại', () => {
+    const t0 = new Date('2026-05-01T00:00:00Z');
+    const bought = applyPurchase({ standardUntil: null, proUntil: null }, 'standard', 30, t0);
+    const t10 = new Date('2026-05-11T00:00:00Z');
+    const withPro = applyPurchase(bought, 'pro', 7, t10);
+    expect(withPro.proUntil).toBe('2026-05-18T00:00:00.000Z');
+    expect(withPro.standardUntil).toBe('2026-06-07T00:00:00.000Z'); // 31/5 + 7 ngày
+    const afterPro = new Date('2026-05-18T00:00:00.001Z');
+    expect(tierOf(withPro, afterPro)).toBe('standard');
+    // Còn lại đúng 20 ngày Tiêu chuẩn như lúc mua Pro (30 - 10).
+    expect((new Date(withPro.standardUntil!).getTime() - new Date('2026-05-18T00:00:00Z').getTime()) / 86_400_000).toBe(20);
+  });
+
+  it('mua Tiêu chuẩn khi đang có Pro: bắt đầu sau Pro; mua Pro khi Tiêu chuẩn đã hết hạn thì không đụng tới nó', () => {
+    const t0 = new Date('2026-05-01T00:00:00Z');
+    const pro = applyPurchase({ standardUntil: null, proUntil: null }, 'pro', 7, t0);
+    const both = applyPurchase(pro, 'standard', 7, t0);
+    expect(both.proUntil).toBe('2026-05-08T00:00:00.000Z');
+    expect(both.standardUntil).toBe('2026-05-15T00:00:00.000Z');
+
+    const expiredStandard = { standardUntil: '2026-03-01T00:00:00.000Z', proUntil: null };
+    expect(applyPurchase(expiredStandard, 'pro', 7, t0).standardUntil).toBe('2026-03-01T00:00:00.000Z');
+  });
+
+  it('quyền lợi tăng dần theo hạng, khách không xuất file', () => {
+    const e = buildEntitlements({ guestDailySearches: 3, freeDailySearches: 10 });
+    expect(e.guest).toMatchObject({ dailySearches: 3, exportRows: 0, libraryMax: 0, historyMax: 0, referenceExport: false });
+    expect(e.free).toMatchObject({ dailySearches: 10, exportRows: 50 });
+    expect(e.standard.dailySearches).toBeNull();
+    expect(e.pro.dailySearches).toBeNull();
+    const order = [e.guest, e.free, e.standard, e.pro];
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i]!.maxResultsPerSource).toBeGreaterThanOrEqual(order[i - 1]!.maxResultsPerSource);
+      expect(order[i]!.libraryMax).toBeGreaterThanOrEqual(order[i - 1]!.libraryMax);
+      expect(order[i]!.historyMax).toBeGreaterThanOrEqual(order[i - 1]!.historyMax);
+    }
+    expect(e.standard.referenceExport).toBe(false);
+    expect(e.pro.referenceExport).toBe(true);
   });
 });
 

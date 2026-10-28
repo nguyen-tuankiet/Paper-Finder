@@ -71,13 +71,26 @@ Mở `https://<địa-chỉ>/admin`, nhập `ADMIN_PASSWORD` để xem số ngư
 
 Dịch vụ thường được bật tự động deploy khi bạn `git push` lên nhánh `main` (xem mục **Settings → Auto-Deploy** của dịch vụ để chắc chắn). Nếu không thấy deploy mới, bấm **Manual Deploy → Deploy latest commit** trong trang dịch vụ.
 
-## 7. Tài khoản, gói Pro và thanh toán PayOS (tùy chọn)
+## 7. Tài khoản, hạng và thanh toán PayOS (tùy chọn)
 
-Mặc định tính năng này **tắt**: ai cũng tìm không giới hạn. Khi bật, khách có `GUEST_DAILY_SEARCHES` lượt/ngày (theo IP), thành viên miễn phí có `FREE_DAILY_SEARCHES` lượt/ngày, gói Pro không giới hạn và có thêm thư viện cá nhân, lịch sử tìm kiếm, xuất BibTeX/RIS. Mỗi từ khóa trong một lần tìm tính một lượt; lần tìm mà không nguồn nào trả kết quả (hoặc bị hủy) được hoàn lại lượt.
+Mặc định tính năng này **tắt**: ai cũng dùng đầy đủ không giới hạn. Khi bật có bốn hạng:
+
+| | Khách (chưa đăng nhập) | Miễn phí (đã đăng nhập) | Tiêu chuẩn | Pro |
+|---|---|---|---|---|
+| Lượt tìm mỗi ngày | `GUEST_DAILY_SEARCHES` (3) | `FREE_DAILY_SEARCHES` (10) | không giới hạn | không giới hạn |
+| Kết quả tối đa mỗi nguồn | 20 | 50 | 200 | 500 |
+| Xuất Excel/CSV | không | tối đa 50 dòng/file | không giới hạn | không giới hạn |
+| Thư viện cá nhân | không | không | 200 bài | 5.000 bài |
+| Lịch sử tìm kiếm | không | không | 20 lần | 50 lần |
+| Xuất BibTeX/RIS | không | không | không | có |
+
+Hạng Tiêu chuẩn và Pro mua theo thời hạn 7 ngày, 1 tháng hoặc 1 năm (6 gói, giá ở `.env.example`). Mọi giới hạn nằm trong **một hàm** `buildEntitlements` ở `server/src/accounts/plans.ts`; sửa ở đó để đổi chính sách. Mỗi từ khóa trong một lần tìm tính một lượt; lần tìm mà không nguồn nào trả kết quả (hoặc bị hủy) được hoàn lại lượt. Khách được tính theo IP nên đổi mạng là có lượt mới; hãy coi đây là giới hạn mềm.
+
+**Quy tắc khi mua nhiều gói:** mua thêm cùng hạng thì cộng dồn thời hạn. Mua Pro khi đang có Tiêu chuẩn: Pro dùng ngay, thời gian Tiêu chuẩn còn lại không bị mất mà được lùi thêm đúng bằng số ngày Pro vừa mua. Mua Tiêu chuẩn khi đang có Pro: bắt đầu tính sau khi Pro hết. Đăng nhập được nhớ khoảng 6 tháng trên mỗi trình duyệt và tự gia hạn khi còn dùng.
 
 ### 7.1. Cơ sở dữ liệu (bắt buộc khi chạy trên Render)
 
-Render Free **xóa ổ đĩa mỗi lần khởi động lại**, nên không thể lưu tài khoản và đơn thanh toán ở đó (người dùng mất gói Pro đã mua). Ứng dụng từ chối khởi động nếu bật tài khoản trên Render mà chưa có `DATABASE_URL`.
+Render Free **xóa ổ đĩa mỗi lần khởi động lại**, nên không thể lưu tài khoản và đơn thanh toán ở đó (người dùng mất gói đã mua). Ứng dụng từ chối khởi động nếu bật tài khoản trên Render mà chưa có `DATABASE_URL`.
 
 1. Tạo một PostgreSQL miễn phí ở [Neon](https://neon.tech) (hoặc Supabase). Chọn vùng gần Singapore.
 2. Sao chép chuỗi kết nối (dạng `postgresql://user:pass@host/db?sslmode=require`).
@@ -92,7 +105,7 @@ Trên Render, thêm biến môi trường:
 | `SESSION_SECRET` | chuỗi ngẫu nhiên ≥ 32 ký tự: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 | `DATABASE_URL` | xem 7.1 |
 | `FREE_DAILY_SEARCHES`, `GUEST_DAILY_SEARCHES` | tùy chọn, mặc định 10 và 3 |
-| `PRO_PRICE_MONTH`, `PRO_PRICE_YEAR` | tùy chọn, mặc định 49000 và 399000 (VND) |
+| `PRICE_STANDARD_WEEK/MONTH/YEAR`, `PRICE_PRO_WEEK/MONTH/YEAR` | tùy chọn, giá VND từng gói (mặc định 15.000 / 39.000 / 299.000 và 29.000 / 79.000 / 599.000) |
 
 Đổi `SESSION_SECRET` sẽ đăng xuất mọi người. Nên bật `TRUST_PROXY=1` (đã có trong `render.yaml`) để cookie đăng nhập có cờ `Secure` và giới hạn theo IP đúng.
 
@@ -102,20 +115,20 @@ Trên Render, thêm biến môi trường:
 2. Lấy **Client ID**, **API Key**, **Checksum Key** của kênh.
 3. Trên Render thêm: `PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY` và `PUBLIC_BASE_URL` (địa chỉ công khai, vd. `https://paperfinder.onrender.com`, không có dấu `/` cuối). Thiếu một trong bốn thì nút thanh toán bị tắt.
 4. Trong cài đặt kênh PayOS, đặt **Webhook URL** = `https://<địa-chỉ>/api/billing/payos-webhook`.
-5. **Thử trước khi bán:** tạo một đơn nhỏ (có thể đặt tạm `PRO_PRICE_MONTH=2000`), thanh toán thật, kiểm tra Pro tự bật, rồi trả giá về như cũ.
+5. **Thử trước khi bán:** tạo một đơn nhỏ (có thể đặt tạm `PRICE_STANDARD_WEEK=2000`), thanh toán thật, kiểm tra hạng tự bật, rồi trả giá về như cũ.
 
-Cách hoạt động và an toàn: khi người dùng bấm thanh toán, máy chủ tạo đơn và link PayOS. Sau khi trả tiền, PayOS gọi webhook và đưa người dùng về trang. **Máy chủ không tin nội dung webhook**: nó chỉ lấy mã đơn rồi hỏi lại PayOS trạng thái thật và số tiền đã nhận, chỉ kích hoạt khi đã trả đủ, và chỉ cộng Pro **một lần** cho mỗi đơn (webhook gọi lặp hay trang quay lại gọi cùng lúc đều an toàn). Mua thêm khi còn hạn thì được cộng dồn. Pro không tự động gia hạn.
+Cách hoạt động và an toàn: khi người dùng bấm thanh toán, máy chủ tạo đơn và link PayOS. Sau khi trả tiền, PayOS gọi webhook và đưa người dùng về trang. **Máy chủ không tin nội dung webhook**: nó chỉ lấy mã đơn rồi hỏi lại PayOS trạng thái thật và số tiền đã nhận, chỉ kích hoạt khi đã trả đủ, và chỉ cộng thời hạn **một lần** cho mỗi đơn (webhook gọi lặp hay trang quay lại gọi cùng lúc đều an toàn). Gói không tự động gia hạn.
 
 > Phần tích hợp PayOS được viết theo tài liệu công khai của PayOS và kiểm thử bằng PayOS giả trong mã nguồn, **chưa được thử với PayOS thật**. Hãy làm bước thử ở mục 7.3.5 và xem log `checkout_failed` / `confirm_failed` nếu có lỗi.
 
-### 7.4. Cấp Pro thủ công và xem thống kê tài khoản
+### 7.4. Cấp gói thủ công và xem thống kê tài khoản
 
-Cần `ADMIN_PASSWORD`. Ví dụ cấp 30 ngày Pro (PowerShell):
+Cần `ADMIN_PASSWORD`. Ví dụ cấp 30 ngày hạng Pro (`tier` là `standard` hoặc `pro`, mặc định `pro`) bằng PowerShell:
 
 ```powershell
 $h = @{ Authorization = "Bearer <ADMIN_PASSWORD>"; "Content-Type" = "application/json" }
-Invoke-RestMethod -Method Post -Uri https://<địa-chỉ>/api/admin/grant -Headers $h -Body '{"email":"nguoidung@example.com","days":30}'
-Invoke-RestMethod -Uri https://<địa-chỉ>/api/admin/accounts -Headers $h   # số người dùng, Pro đang hoạt động, doanh thu
+Invoke-RestMethod -Method Post -Uri https://<địa-chỉ>/api/admin/grant -Headers $h -Body '{"email":"nguoidung@example.com","tier":"pro","days":30}'
+Invoke-RestMethod -Uri https://<địa-chỉ>/api/admin/accounts -Headers $h   # số người dùng, số người đang dùng từng hạng, doanh thu
 ```
 
 ### 7.5. Việc cần làm ngoài mã nguồn

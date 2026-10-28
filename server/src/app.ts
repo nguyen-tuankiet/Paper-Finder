@@ -6,7 +6,7 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import { rateLimit } from 'express-rate-limit';
 import helmet from 'helmet';
 import { ZodError } from 'zod';
-import type { SearchEvent } from '../../shared/types.js';
+import type { Entitlements, SearchEvent } from '../../shared/types.js';
 import type { AppConfig } from './config.js';
 import { UpstreamError } from './lib/errors.js';
 import type { Logger } from './logger.js';
@@ -17,10 +17,9 @@ import { runSearch, type AdapterMap } from './services/search.js';
 import { StatsService } from './services/stats.js';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { PRO_EXPORT_FORMATS } from '../../shared/types.js';
-import { currentUser, identityOf, type AccountsContext } from './accounts/context.js';
-import { MAX_HISTORY_ENTRIES, registerAccountRoutes } from './accounts/routes.js';
-import { isProActive } from './accounts/types.js';
+import { REFERENCE_EXPORT_FORMATS } from '../../shared/types.js';
+import { callerOf, type AccountsContext, type Caller } from './accounts/context.js';
+import { registerAccountRoutes } from './accounts/routes.js';
 import { DEFAULT_DOWNLOAD_OPTIONS, DownloadError, UrlSigner, openPdf, safePdfFileName, type DownloadErrorCode, type DownloadOptions } from './services/download.js';
 
 const DOWNLOAD_STATUS: Record<DownloadErrorCode, number> = {
@@ -35,6 +34,9 @@ const DOWNLOAD_STATUS: Record<DownloadErrorCode, number> = {
 };
 
 const MAX_ACTIVE_DOWNLOADS = 4;
+
+/** Khi tính năng tài khoản tắt: không giới hạn gì (giữ nguyên hành vi trước khi có tài khoản). */
+const UNRESTRICTED: Entitlements = { tier: 'pro', label: 'Đầy đủ', dailySearches: null, maxResultsPerSource: 500, exportRows: null, referenceExport: true, libraryMax: 0, historyMax: 0 };
 
 export interface AppDeps {
   /** Ký/kiểm tra link PDF cho /api/download. Mặc định dùng khóa ngẫu nhiên mỗi lần khởi động. */
@@ -112,10 +114,10 @@ export function createApp({ adapters, config, logger, stats = new StatsService()
     // Tính năng tài khoản tắt: giao diện vẫn hỏi /api/me và /api/plans để biết có cần hiện nút đăng nhập hay không.
     app.get('/api/me', (_req, res) => {
       res.setHeader('Cache-Control', 'no-store');
-      res.json({ accountsEnabled: false, user: null, quota: { limit: null, used: 0, remaining: null, resetsAt: null } });
+      res.json({ accountsEnabled: false, user: null, tier: 'pro', entitlements: UNRESTRICTED, quota: { limit: null, used: 0, remaining: null, resetsAt: null } });
     });
     app.get('/api/plans', (_req, res) => {
-      res.json({ accountsEnabled: false, billingEnabled: false, freeDailySearches: 0, guestDailySearches: 0, plans: [] });
+      res.json({ accountsEnabled: false, billingEnabled: false, tiers: [], plans: [] });
     });
   }
 
@@ -158,26 +160,34 @@ export function createApp({ adapters, config, logger, stats = new StatsService()
       return;
     }
 
-    // Hạn mức lượt tìm: mỗi từ khóa một lượt; gói Pro không giới hạn.
-    let billed: Awaited<ReturnType<typeof identityOf>> | undefined;
+    // Quyền lợi theo hạng: số kết quả mỗi nguồn, rồi hạn mức lượt tìm (mỗi từ khóa một lượt; hạng trả phí không giới hạn).
+    let caller: Caller | undefined;
     const keywordCount = request.keywords.length;
     if (accounts) {
-      billed = await identityOf(accounts, req);
-      const charge = await accounts.quota.consume(billed.identity, keywordCount);
+      caller = await callerOf(accounts, req);
+      const cap = caller.entitlements.maxResultsPerSource;
+      if (request.maxResults > cap) {
+        const message = caller.user
+          ? `Hạng ${caller.entitlements.label} chỉ lấy tối đa ${cap} kết quả mỗi nguồn. Hãy giảm số kết quả hoặc nâng hạng.`
+          : `Khách chỉ lấy tối đa ${cap} kết quả mỗi nguồn. Hãy đăng nhập hoặc giảm số kết quả.`;
+        res.status(403).json({ error: 'results_limit', message, limit: cap, signedIn: Boolean(caller.user) });
+        return;
+      }
+      const charge = await accounts.quota.consume(caller.identity, keywordCount);
       if (!charge.ok) {
         const { limit = 0, remaining = 0 } = charge.quota;
         const partial = (remaining ?? 0) > 0;
         const message = partial
-          ? `Lần tìm này có ${keywordCount} từ khóa (mỗi từ khóa tính một lượt) nhưng hôm nay bạn chỉ còn ${remaining} lượt. Hãy bớt từ khóa hoặc nâng cấp Pro.`
-          : billed.user
-            ? `Bạn đã dùng hết ${limit} lượt tìm miễn phí hôm nay. Nâng cấp Pro để tìm không giới hạn, hoặc quay lại vào ngày mai.`
-            : `Bạn đã dùng hết ${limit} lượt tìm của khách hôm nay. Đăng nhập để có ${accounts.limits.freeDailySearches} lượt mỗi ngày, hoặc nâng cấp Pro để không giới hạn.`;
-        res.status(429).json({ error: 'quota_exceeded', message, quota: charge.quota, signedIn: Boolean(billed.user) });
+          ? `Lần tìm này có ${keywordCount} từ khóa (mỗi từ khóa tính một lượt) nhưng hôm nay bạn chỉ còn ${remaining} lượt. Hãy bớt từ khóa hoặc nâng cấp gói.`
+          : caller.user
+            ? `Bạn đã dùng hết ${limit} lượt tìm hôm nay. Nâng cấp gói để tìm không giới hạn, hoặc quay lại vào ngày mai.`
+            : `Bạn đã dùng hết ${limit} lượt tìm của khách hôm nay. Đăng nhập để có ${accounts.entitlements.free.dailySearches} lượt mỗi ngày và thêm tính năng, hoặc mua gói để không giới hạn.`;
+        res.status(429).json({ error: 'quota_exceeded', message, quota: charge.quota, signedIn: Boolean(caller.user) });
         return;
       }
     }
     const refund = () => {
-      if (accounts && billed) void accounts.quota.refund(billed.identity, keywordCount).catch(() => undefined);
+      if (accounts && caller) void accounts.quota.refund(caller.identity, keywordCount).catch(() => undefined);
     };
 
     stats.recordSearchStarted();
@@ -215,10 +225,10 @@ export function createApp({ adapters, config, logger, stats = new StatsService()
           : { kind: 'failed', sources: result.sources },
       );
       if (result.stats.sourcesSucceeded === 0) refund(); // không nguồn nào trả lời: không tính lượt
-      else if (accounts && billed?.user && isProActive(billed.user, accounts.now())) {
-        // Lịch sử tìm kiếm chỉ lưu cho gói Pro (lưu điều kiện tìm, không lưu kết quả).
+      else if (accounts && caller?.user && caller.entitlements.historyMax > 0) {
+        // Lịch sử tìm kiếm chỉ lưu cho hạng có quyền (lưu điều kiện tìm, không lưu kết quả).
         void accounts.store
-          .addHistory(billed.user.id, { id: randomUUID(), at: accounts.now().toISOString(), request, total: result.stats.total }, MAX_HISTORY_ENTRIES)
+          .addHistory(caller.user.id, { id: randomUUID(), at: accounts.now().toISOString(), request, total: result.stats.total }, caller.entitlements.historyMax)
           .catch((error: unknown) => logger.error('history_failed', { error: error instanceof Error ? error.message : String(error) }));
       }
     } catch (error) {
@@ -312,19 +322,28 @@ export function createApp({ adapters, config, logger, stats = new StatsService()
       res.status(400).json({ error: 'invalid_request', message: 'Dữ liệu xuất file không hợp lệ.', issues: issuesOf(parsed.error) });
       return;
     }
-    const { format, records } = parsed.data;
-    if ((PRO_EXPORT_FORMATS as readonly string[]).includes(format)) {
-      // BibTeX/RIS là tính năng gói Pro. Khi tài khoản tắt thì không khóa (giữ nguyên hành vi cũ).
-      if (accounts) {
-        const user = await currentUser(accounts, req);
-        if (!user) {
+    const { format } = parsed.data;
+    let records = parsed.data.records;
+    let truncatedFrom: number | undefined;
+    if (accounts) {
+      const caller = await callerOf(accounts, req);
+      const { entitlements } = caller;
+      if ((REFERENCE_EXPORT_FORMATS as readonly string[]).includes(format)) {
+        if (!caller.user) {
           res.status(401).json({ error: 'unauthorized', message: 'Vui lòng đăng nhập để xuất BibTeX/RIS.' });
           return;
         }
-        if (!isProActive(user, accounts.now())) {
-          res.status(402).json({ error: 'pro_required', message: 'Xuất BibTeX/RIS dành cho gói Pro.' });
+        if (!entitlements.referenceExport) {
+          res.status(402).json({ error: 'plan_required', message: 'Xuất BibTeX/RIS dành cho hạng Pro.' });
           return;
         }
+      } else if (entitlements.exportRows === 0) {
+        res.status(401).json({ error: 'unauthorized', message: 'Vui lòng đăng nhập để xuất file Excel/CSV.' });
+        return;
+      } else if (entitlements.exportRows !== null && records.length > entitlements.exportRows) {
+        // Hạng miễn phí: xuất phần đầu danh sách và cho giao diện biết để gợi ý nâng hạng (không từ chối cả file).
+        truncatedFrom = records.length;
+        records = records.slice(0, entitlements.exportRows);
       }
     }
     const body = format === 'csv' ? toCsv(records) : format === 'bibtex' ? toBibtex(records) : format === 'ris' ? toRis(records) : await toXlsx(records);
@@ -333,6 +352,10 @@ export function createApp({ adapters, config, logger, stats = new StatsService()
     res.setHeader('Content-Type', CONTENT_TYPES[format]);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Cache-Control', 'no-store');
+    if (truncatedFrom !== undefined) {
+      res.setHeader('X-Export-Truncated', `${records.length}/${truncatedFrom}`);
+      res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Export-Truncated');
+    }
     res.send(body);
   });
 

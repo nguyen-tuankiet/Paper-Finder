@@ -1,7 +1,8 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export const SESSION_COOKIE = 'pf_session';
-export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+/** Phiên nhớ lâu: người dùng đăng nhập một lần và được giữ ~6 tháng, tự gia hạn khi còn dùng (xem /api/me). */
+export const SESSION_TTL_MS = 180 * 24 * 60 * 60 * 1000;
 
 interface Payload {
   /** Mã người dùng. */
@@ -28,7 +29,7 @@ export class SessionSigner {
   }
 
   /** Trả null nếu token sai chữ ký, hỏng hoặc hết hạn. */
-  verify(token: string, now = Date.now()): { userId: string; sessionVersion: number } | null {
+  verify(token: string, now = Date.now()): { userId: string; sessionVersion: number; expiresAt: number } | null {
     const [body, signature, extra] = token.split('.');
     if (!body || !signature || extra !== undefined) return null;
     const expected = Buffer.from(this.sign(body));
@@ -37,7 +38,7 @@ export class SessionSigner {
     try {
       const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as Partial<Payload>;
       if (typeof payload.u !== 'string' || typeof payload.v !== 'number' || typeof payload.e !== 'number' || payload.e <= now) return null;
-      return { userId: payload.u, sessionVersion: payload.v };
+      return { userId: payload.u, sessionVersion: payload.v, expiresAt: payload.e };
     } catch {
       return null;
     }

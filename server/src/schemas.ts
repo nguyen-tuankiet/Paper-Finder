@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MAX_RESULT_OPTIONS, SOURCE_IDS, type SearchRequest } from '../../shared/types.js';
+import { MAX_RESULT_OPTIONS, PAID_TIERS, PLAN_PERIODS, SOURCE_IDS, type SearchRequest } from '../../shared/types.js';
 
 const MAX_KEYWORDS = 10;
 const currentYear = () => new Date().getUTCFullYear();
@@ -83,7 +83,7 @@ const password = z.string().min(8, 'Mật khẩu cần ít nhất 8 ký tự.').
 export const registerSchema = z.object({ email, password }).strict();
 export const loginSchema = z.object({ email, password: z.string().min(1).max(200) }).strict();
 export const changePasswordSchema = z.object({ currentPassword: z.string().min(1).max(200), newPassword: password }).strict();
-export const checkoutSchema = z.object({ plan: z.enum(['month', 'year']) }).strict();
+export const checkoutSchema = z.object({ tier: z.enum(PAID_TIERS), period: z.enum(PLAN_PERIODS) }).strict();
 export const confirmPaymentSchema = z.object({ orderCode: z.number().int().positive() }).strict();
 
 /** Bài lưu vào thư viện: giữ nguyên bản ghi PaperRecord của giao diện, chỉ kiểm tra các trường cốt lõi và giới hạn kích thước. */
@@ -104,4 +104,4 @@ export const savedPaperSchema = z.looseObject({
 
 export const saveLibrarySchema = z.object({ record: savedPaperSchema, folder: z.string().trim().max(60).default('') }).strict();
 
-export const adminGrantSchema = z.object({ email, days: z.number().int().min(1).max(3650) }).strict();
+export const adminGrantSchema = z.object({ email, tier: z.enum(PAID_TIERS).default('pro'), days: z.number().int().min(1).max(3650) }).strict();

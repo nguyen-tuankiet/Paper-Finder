@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import type { HistoryEntry, LibraryItem } from '../../../shared/types.js';
+import type { HistoryEntry, LibraryItem, PaidTier } from '../../../shared/types.js';
 import { silentLogger, type Logger } from '../logger.js';
-import { isProActive, type AccountStore, type OrderRow, type SaveToLibraryResult, type UserRow } from './types.js';
+import { PERIOD_DAYS, applyPurchase, parsePlanKey, tierOf } from './plans.js';
+import type { AccountCounts, AccountStore, OrderRow, SaveToLibraryResult, UserRow } from './types.js';
 
 interface Snapshot {
   version: 1;
@@ -21,7 +22,6 @@ export interface MemoryStoreOptions {
   logger?: Logger;
 }
 
-const DAY_MS = 86_400_000;
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
 /** Kho tài khoản trong bộ nhớ, tùy chọn ghi ra file JSON (ghi nguyên tử). Dùng cho phát triển, thử nghiệm và máy chủ có ổ đĩa bền. */
@@ -54,7 +54,7 @@ export class MemoryAccountStore implements AccountStore {
   async createUser(email: string, passwordHash: string): Promise<UserRow | null> {
     const key = normalizeEmail(email);
     if (this.byEmail.has(key)) return null;
-    const user: UserRow = { id: randomUUID(), email: key, passwordHash, sessionVersion: 1, proUntil: null, createdAt: new Date().toISOString() };
+    const user: UserRow = { id: randomUUID(), email: key, passwordHash, sessionVersion: 1, standardUntil: null, proUntil: null, createdAt: new Date().toISOString() };
     this.users.set(user.id, user);
     this.byEmail.set(key, user.id);
     this.touch();
@@ -96,17 +96,12 @@ export class MemoryAccountStore implements AccountStore {
 
   // ---------- Gói Pro và đơn hàng ----------
 
-  async grantPro(userId: string, days: number, now: Date): Promise<UserRow | null> {
+  async grantPlan(userId: string, tier: PaidTier, days: number, now: Date): Promise<UserRow | null> {
     const user = this.users.get(userId);
     if (!user) return null;
-    this.extend(user, days, now);
+    Object.assign(user, applyPurchase(user, tier, days, now));
     this.touch();
     return { ...user };
-  }
-
-  private extend(user: UserRow, days: number, now: Date): void {
-    const current = user.proUntil ? new Date(user.proUntil).getTime() : 0;
-    user.proUntil = new Date(Math.max(now.getTime(), current) + days * DAY_MS).toISOString();
   }
 
   async createOrder(order: OrderRow): Promise<void> {
@@ -127,24 +122,27 @@ export class MemoryAccountStore implements AccountStore {
     }
   }
 
-  async settleOrder(orderCode: number, days: number, now: Date) {
+  async settleOrder(orderCode: number, now: Date) {
     const order = this.orders.get(orderCode);
     if (!order) return null;
     const user = this.users.get(order.userId);
-    if (!user) return null;
+    const plan = parsePlanKey(order.plan);
+    if (!user || !plan) return null;
     if (order.status === 'paid') return { order: { ...order }, user: { ...user }, activated: false };
     order.status = 'paid';
     order.paidAt = now.toISOString();
-    this.extend(user, days, now);
+    Object.assign(user, applyPurchase(user, plan.tier, PERIOD_DAYS[plan.period], now));
     this.touch();
     return { order: { ...order }, user: { ...user }, activated: true };
   }
 
-  async counts(now: Date) {
+  async counts(now: Date): Promise<AccountCounts> {
     const paid = [...this.orders.values()].filter((o) => o.status === 'paid');
+    const tiers = [...this.users.values()].map((u) => tierOf(u, now));
     return {
       users: this.users.size,
-      activePro: [...this.users.values()].filter((u) => isProActive(u, now)).length,
+      activeStandard: tiers.filter((t) => t === 'standard').length,
+      activePro: tiers.filter((t) => t === 'pro').length,
       paidOrders: paid.length,
       revenueVnd: paid.reduce((sum, o) => sum + o.amount, 0),
     };
@@ -234,6 +232,7 @@ export class MemoryAccountStore implements AccountStore {
     try {
       const data = JSON.parse(readFileSync(this.filePath, 'utf8')) as Partial<Snapshot>;
       for (const user of data.users ?? []) {
+        user.standardUntil ??= null;
         this.users.set(user.id, user);
         this.byEmail.set(normalizeEmail(user.email), user.id);
       }

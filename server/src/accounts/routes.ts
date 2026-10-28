@@ -2,17 +2,15 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Express, NextFunction, Request, RequestHandler, Response } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import type { ZodType } from 'zod';
-import type { LibraryItem, MeResponse, PaperRecord, PaymentStatusResponse, PlansResponse } from '../../../shared/types.js';
+import type { Entitlements, LibraryItem, MeResponse, PaperRecord, PaymentStatusResponse, PlansResponse } from '../../../shared/types.js';
 import type { Logger } from '../logger.js';
 import { adminGrantSchema, changePasswordSchema, checkoutSchema, confirmPaymentSchema, loginSchema, registerSchema, saveLibrarySchema } from '../schemas.js';
-import { currentUser, identityOf, toAccountUser, type AccountsContext } from './context.js';
+import { callerFrom, callerOf, currentSession, currentUser, toAccountUser, type AccountsContext } from './context.js';
 import { burnPasswordCheck, hashPassword, verifyPassword } from './passwords.js';
 import { PayOsError } from './payos.js';
-import { clearedSessionCookie, sessionCookie } from './session.js';
-import { isProActive, type UserRow } from './types.js';
+import { SESSION_TTL_MS, clearedSessionCookie, sessionCookie } from './session.js';
+import type { UserRow } from './types.js';
 
-export const MAX_LIBRARY_ITEMS = 5000;
-export const MAX_HISTORY_ENTRIES = 50;
 const MAX_SAVED_RECORD_BYTES = 40_000;
 
 export interface AccountRouteDeps {
@@ -72,18 +70,21 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
     res.setHeader('Set-Cookie', sessionCookie(ctx.signer.create(user.id, user.sessionVersion, ctx.now().getTime()), req.secure));
   };
 
-  const requirePro = async (req: Request, res: Response): Promise<UserRow | undefined> => {
-    const user = await currentUser(ctx, req);
-    if (!user) {
+  /** Cho phép khi hạng của người gọi có quyền lợi `allow`; ngược lại trả 401 (chưa đăng nhập) hoặc 402 (cần nâng hạng). */
+  const requireFeature = async (req: Request, res: Response, allow: (e: Entitlements) => boolean, message: string) => {
+    const caller = await callerOf(ctx, req);
+    if (!caller.user) {
       res.status(401).json({ error: 'unauthorized', message: 'Vui lòng đăng nhập.' });
       return undefined;
     }
-    if (!isProActive(user, ctx.now())) {
-      res.status(402).json({ error: 'pro_required', message: 'Tính năng này dành cho gói Pro.' });
+    if (!allow(caller.entitlements)) {
+      res.status(402).json({ error: 'plan_required', message });
       return undefined;
     }
-    return user;
+    return { user: caller.user, entitlements: caller.entitlements };
   };
+  const NEED_LIBRARY = 'Thư viện cá nhân dành cho hạng Tiêu chuẩn trở lên.';
+  const NEED_HISTORY = 'Lịch sử tìm kiếm dành cho hạng Tiêu chuẩn trở lên.';
 
   // ---------- Thông tin công khai ----------
 
@@ -91,8 +92,7 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
     const body: PlansResponse = {
       accountsEnabled: true,
       billingEnabled: ctx.billing.enabled,
-      freeDailySearches: ctx.limits.freeDailySearches,
-      guestDailySearches: ctx.limits.guestDailySearches,
+      tiers: [ctx.entitlements.guest, ctx.entitlements.free, ctx.entitlements.standard, ctx.entitlements.pro],
       plans: ctx.billing.plans(),
     };
     res.json(body);
@@ -103,8 +103,17 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
     noStore,
     apiLimiter,
     wrap(async (req, res) => {
-      const { identity, user } = await identityOf(ctx, req);
-      const body: MeResponse = { accountsEnabled: true, user: user ? toAccountUser(user, ctx.now()) : null, quota: await ctx.quota.peek(identity) };
+      const session = await currentSession(ctx, req);
+      const caller = callerFrom(ctx, req, session?.user ?? null);
+      // Tự gia hạn: người còn dùng thì phiên được kéo dài, nên đăng nhập một lần là được ghi nhớ lâu dài.
+      if (session && session.expiresAt - ctx.now().getTime() < SESSION_TTL_MS / 2) startSession(req, res, session.user);
+      const body: MeResponse = {
+        accountsEnabled: true,
+        user: caller.user ? toAccountUser(caller.user, ctx.now()) : null,
+        tier: caller.tier,
+        entitlements: caller.entitlements,
+        quota: await ctx.quota.peek(caller.identity),
+      };
       res.json(body);
     }),
   );
@@ -195,7 +204,7 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
       const input = parse(checkoutSchema, req.body, res);
       if (!input) return;
       try {
-        res.json(await ctx.billing.checkout(user, input.plan));
+        res.json(await ctx.billing.checkout(user, input.tier, input.period));
       } catch (error) {
         logger.error('checkout_failed', { error: error instanceof Error ? error.message : String(error) });
         res.status(502).json({ error: 'payment_provider', message: error instanceof PayOsError ? error.message : 'Không tạo được link thanh toán.' });
@@ -253,9 +262,9 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
     noStore,
     apiLimiter,
     wrap(async (req, res) => {
-      const user = await requirePro(req, res);
-      if (!user) return;
-      res.json(await ctx.store.listLibrary(user.id));
+      const ok = await requireFeature(req, res, (e) => e.libraryMax > 0, NEED_LIBRARY);
+      if (!ok) return;
+      res.json(await ctx.store.listLibrary(ok.user.id));
     }),
   );
 
@@ -264,8 +273,9 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
     noStore,
     apiLimiter,
     wrap(async (req, res) => {
-      const user = await requirePro(req, res);
-      if (!user) return;
+      const ok = await requireFeature(req, res, (e) => e.libraryMax > 0, NEED_LIBRARY);
+      if (!ok) return;
+      const { user, entitlements } = ok;
       const input = parse(saveLibrarySchema, req.body, res);
       if (!input) return;
       const record = { ...input.record } as Record<string, unknown>;
@@ -275,9 +285,9 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
         return;
       }
       const item: LibraryItem = { key: libraryKey(input.record), folder: input.folder, savedAt: ctx.now().toISOString(), record: record as unknown as PaperRecord };
-      const status = await ctx.store.saveToLibrary(user.id, item, MAX_LIBRARY_ITEMS);
+      const status = await ctx.store.saveToLibrary(user.id, item, entitlements.libraryMax);
       if (status === 'full') {
-        res.status(409).json({ error: 'library_full', message: `Thư viện đã đầy (${MAX_LIBRARY_ITEMS} bài). Hãy xóa bớt trước khi lưu thêm.` });
+        res.status(409).json({ error: 'library_full', message: `Thư viện đã đầy (${entitlements.libraryMax} bài). Hãy xóa bớt hoặc nâng hạng để lưu thêm.` });
         return;
       }
       res.status(status === 'saved' ? 201 : 200).json({ status, key: item.key });
@@ -289,9 +299,9 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
     noStore,
     apiLimiter,
     wrap(async (req, res) => {
-      const user = await requirePro(req, res);
-      if (!user) return;
-      const removed = await ctx.store.removeFromLibrary(user.id, String(req.params.key));
+      const ok = await requireFeature(req, res, (e) => e.libraryMax > 0, NEED_LIBRARY);
+      if (!ok) return;
+      const removed = await ctx.store.removeFromLibrary(ok.user.id, String(req.params.key));
       res.status(removed ? 200 : 404).json(removed ? { ok: true } : { error: 'not_found', message: 'Bài không có trong thư viện.' });
     }),
   );
@@ -303,9 +313,9 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
     noStore,
     apiLimiter,
     wrap(async (req, res) => {
-      const user = await requirePro(req, res);
-      if (!user) return;
-      res.json(await ctx.store.listHistory(user.id));
+      const ok = await requireFeature(req, res, (e) => e.historyMax > 0, NEED_HISTORY);
+      if (!ok) return;
+      res.json(await ctx.store.listHistory(ok.user.id));
     }),
   );
 
@@ -314,9 +324,9 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
     noStore,
     apiLimiter,
     wrap(async (req, res) => {
-      const user = await requirePro(req, res);
-      if (!user) return;
-      await ctx.store.clearHistory(user.id);
+      const ok = await requireFeature(req, res, (e) => e.historyMax > 0, NEED_HISTORY);
+      if (!ok) return;
+      await ctx.store.clearHistory(ok.user.id);
       res.json({ ok: true });
     }),
   );
@@ -358,8 +368,8 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
         res.status(404).json({ error: 'not_found', message: 'Không có tài khoản với email này.' });
         return;
       }
-      const updated = await ctx.store.grantPro(user.id, input.days, ctx.now());
-      logger.info('pro_granted', { userId: user.id, days: input.days, orderless: true, id: randomUUID().slice(0, 8) });
+      const updated = await ctx.store.grantPlan(user.id, input.tier, input.days, ctx.now());
+      logger.info('plan_granted', { userId: user.id, tier: input.tier, days: input.days, id: randomUUID().slice(0, 8) });
       res.json({ user: updated ? toAccountUser(updated, ctx.now()) : null });
     }),
   );

@@ -5,7 +5,7 @@ import type { PaperRecord } from '../../../shared/types';
 import { useAccount } from '../lib/accountContext';
 import { ApiError, fetchLibrary, saveToLibrary } from '../lib/api';
 
-/** Nút "Lưu" trong cột Thao tác: lưu bài vào thư viện cá nhân (Pro), có thể chọn hoặc gõ tên thư mục. Ẩn khi tài khoản tắt. */
+/** Nút "Lưu" trong cột Thao tác: lưu bài vào thư viện cá nhân (Tiêu chuẩn trở lên), có thể chọn hoặc gõ tên thư mục. Ẩn khi tài khoản tắt. */
 export function SaveToLibraryButton({ record }: { record: PaperRecord }) {
   const account = useAccount();
   const [open, setOpen] = useState(false);
@@ -21,8 +21,8 @@ export function SaveToLibraryButton({ record }: { record: PaperRecord }) {
       account.openAuth('register');
       return;
     }
-    if (next && !account.isPro) {
-      account.openUpgrade('Thư viện cá nhân (lưu bài, chia thư mục) dành cho gói Pro.');
+    if (next && account.entitlements.libraryMax === 0) {
+      account.openUpgrade('Thư viện cá nhân (lưu bài, chia thư mục) dành cho hạng Tiêu chuẩn trở lên.', 'standard');
       return;
     }
     setOpen(next);
@@ -42,7 +42,7 @@ export function SaveToLibraryButton({ record }: { record: PaperRecord }) {
       setOpen(false);
       setFolder('');
     } catch (err) {
-      if (err instanceof ApiError && err.code === 'pro_required') account.openUpgrade(err.message);
+      if (err instanceof ApiError && err.code === 'plan_required') account.openUpgrade(err.message, 'standard');
       else void messageApi.error(err instanceof Error ? err.message : 'Không lưu được.');
     } finally {
       setBusy(false);

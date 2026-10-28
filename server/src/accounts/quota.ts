@@ -1,12 +1,12 @@
-import type { QuotaInfo } from '../../../shared/types.js';
+import type { QuotaInfo, Tier } from '../../../shared/types.js';
 import type { AccountStore } from './types.js';
 
-export type Identity = { kind: 'user'; userId: string; isPro: boolean } | { kind: 'guest'; key: string };
+export type Identity = { kind: 'user'; userId: string; tier: Exclude<Tier, 'guest'> } | { kind: 'guest'; key: string };
 
 export interface QuotaOptions {
   store: AccountStore;
-  freeDailySearches: number;
-  guestDailySearches: number;
+  /** Số lượt tìm mỗi ngày của từng hạng; null = không giới hạn. */
+  dailySearches: (tier: Tier) => number | null;
   timezone: string;
   now?: () => Date;
 }
@@ -20,8 +20,8 @@ function zoneOffsetMs(date: Date, timeZone: string): number {
 }
 
 /**
- * Giới hạn lượt tìm theo ngày: khách tính theo mã băm IP (trong bộ nhớ), thành viên miễn phí tính theo tài khoản (lưu bền),
- * gói Pro không giới hạn. Mỗi từ khóa trong một lần tìm tính là một lượt.
+ * Giới hạn lượt tìm theo ngày: khách tính theo mã băm IP (trong bộ nhớ), thành viên tính theo tài khoản (lưu bền);
+ * hạng trả phí không giới hạn. Mỗi từ khóa trong một lần tìm tính là một lượt.
  */
 export class QuotaService {
   private readonly guests = new Map<string, number>();
@@ -46,8 +46,7 @@ export class QuotaService {
   }
 
   private limitFor(identity: Identity): number | null {
-    if (identity.kind === 'user') return identity.isPro ? null : this.options.freeDailySearches;
-    return this.options.guestDailySearches;
+    return this.options.dailySearches(identity.kind === 'guest' ? 'guest' : identity.tier);
   }
 
   private info(limit: number | null, used: number): QuotaInfo {

@@ -3,6 +3,7 @@ import { Button, Checkbox, Col, Input, InputNumber, Row, Segmented, Select, Spac
 import { useState } from 'react';
 import { MAX_RESULT_OPTIONS, type SearchRequest, type SourceId } from '../../../shared/types';
 import { DEFAULT_SOURCES, SOURCE_HINTS, SOURCE_LABELS, parseKeywords } from '../lib/records';
+import { useAccount } from '../lib/accountContext';
 import { Panel } from './Panel';
 
 const EXAMPLES = [
@@ -35,6 +36,11 @@ export function SearchForm({ searching, disabled, available, onSearch, onCancel 
   const [yearTo, setYearTo] = useState<number | null>(null);
   const [onlyWithDoi, setOnlyWithDoi] = useState(true);
   const [touched, setTouched] = useState(false);
+  const account = useAccount();
+  // Mỗi hạng chỉ chọn được tới một số kết quả mỗi nguồn; giá trị đang chọn tự hạ xuống mức tối đa của hạng.
+  const cap = account.entitlements.maxResultsPerSource;
+  const effectiveMax = (maxResults > cap ? cap : maxResults) as SearchRequest['maxResults'];
+  const resultsLocked = account.enabled && cap < Math.max(...MAX_RESULT_OPTIONS);
 
   const keywords = parseKeywords(text, multi);
   const keywordError =
@@ -61,7 +67,7 @@ export function SearchForm({ searching, disabled, available, onSearch, onCancel 
     onSearch({
       keywords,
       sources,
-      maxResults,
+      maxResults: effectiveMax,
       ...(yearFrom !== null ? { yearFrom } : {}),
       ...(yearTo !== null ? { yearTo } : {}),
       onlyWithDoi,
@@ -178,12 +184,22 @@ export function SearchForm({ searching, disabled, available, onSearch, onCancel 
             <label className="pf-label" htmlFor="pf-max">Số kết quả tối đa (mỗi từ khóa, mỗi nguồn)</label>
             <Select
               id="pf-max"
-              value={maxResults}
+              value={effectiveMax}
               onChange={setMaxResults}
               disabled={searching}
               style={{ width: '100%' }}
-              options={MAX_RESULT_OPTIONS.map((n) => ({ value: n, label: `${n} kết quả` }))}
+              options={MAX_RESULT_OPTIONS.map((n) => ({ value: n, label: n > cap && account.enabled ? `${n} kết quả (cần nâng gói)` : `${n} kết quả`, disabled: account.enabled && n > cap }))}
             />
+            {resultsLocked && (
+              <Button
+                type="link"
+                size="small"
+                style={{ padding: 0, height: 'auto' }}
+                onClick={() => (account.user ? account.openUpgrade('Hạng cao hơn lấy được nhiều kết quả hơn mỗi nguồn.') : account.openAuth('register'))}
+              >
+                {account.user ? 'Mở khóa thêm kết quả' : 'Đăng nhập để lấy nhiều hơn'}
+              </Button>
+            )}
           </Col>
           <Col xs={24} sm={12} lg={6}>
             <label className="pf-label" htmlFor="pf-year-from">Năm xuất bản</label>

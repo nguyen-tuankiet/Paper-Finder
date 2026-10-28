@@ -1,14 +1,29 @@
 import { createContext, useContext } from 'react';
-import type { AccountUser, PlansResponse, QuotaInfo } from '../../../shared/types';
+import type { AccountUser, Entitlements, PaidTier, PlansResponse, QuotaInfo, Tier } from '../../../shared/types';
 import type { AuthTab } from '../components/AuthModal';
+
+/** Khi chưa tải xong hoặc máy chủ tắt tài khoản: không khóa gì (không nháy khóa lúc mới vào trang). */
+export const UNRESTRICTED: Entitlements = {
+  tier: 'pro',
+  label: 'Đầy đủ',
+  dailySearches: null,
+  maxResultsPerSource: 500,
+  exportRows: null,
+  referenceExport: true,
+  libraryMax: 0,
+  historyMax: 0,
+};
 
 export interface AccountApi {
   /** Đã tải xong trạng thái từ máy chủ lần đầu. */
   ready: boolean;
-  /** Máy chủ có bật tài khoản không. Tắt = ẩn mọi thứ liên quan (đăng nhập, Pro, hạn mức). */
+  /** Máy chủ có bật tài khoản không. Tắt = ẩn mọi thứ liên quan (đăng nhập, gói, hạn mức). */
   enabled: boolean;
   user: AccountUser | null;
-  isPro: boolean;
+  /** Hạng hiện tại: guest (chưa đăng nhập), free, standard, pro. */
+  tier: Tier;
+  /** Quyền lợi của hạng hiện tại (do máy chủ quyết định). */
+  entitlements: Entitlements;
   quota: QuotaInfo;
   plans: PlansResponse | null;
   refresh: () => Promise<void>;
@@ -16,8 +31,8 @@ export interface AccountApi {
   register: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   openAuth: (tab?: AuthTab) => void;
-  /** Mở hộp thoại nâng cấp; `reason` là dòng giải thích vì sao (vd. hết lượt, tính năng Pro). */
-  openUpgrade: (reason?: string) => void;
+  /** Mở hộp thoại chọn gói; `reason` là dòng giải thích vì sao, `tier` là hạng nên chọn sẵn. */
+  openUpgrade: (reason?: string, tier?: PaidTier) => void;
 }
 
 export const AccountContext = createContext<AccountApi | null>(null);
@@ -27,4 +42,3 @@ export function useAccount(): AccountApi {
   if (!value) throw new Error('useAccount phải nằm trong <AccountProvider>.');
   return value;
 }
-

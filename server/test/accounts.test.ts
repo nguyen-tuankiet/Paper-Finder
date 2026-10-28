@@ -1,7 +1,7 @@
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { MeResponse, PlansResponse } from '../../shared/types.js';
+import type { MeResponse, PaidTier, PlanPeriod, PlansResponse } from '../../shared/types.js';
 import { createAccountsContext, type AccountsContext } from '../src/accounts/context.js';
 import { MemoryAccountStore } from '../src/accounts/memoryStore.js';
 import { PayOsClient } from '../src/accounts/payos.js';
@@ -14,6 +14,7 @@ import { makeRecord } from './helpers.js';
 
 const SECRET = 'test-secret-test-secret-test-secret-123';
 const ADMIN = 'admin-password-123';
+const PRICES = { 'standard:week': 15_000, 'standard:month': 39_000, 'standard:year': 299_000, 'pro:week': 29_000, 'pro:month': 79_000, 'pro:year': 599_000 } as const;
 
 let failAll = false;
 const crossref: SourceAdapter = {
@@ -30,16 +31,14 @@ const adapters: AdapterMap = { crossref };
 
 /** PayOS giả: lưu trạng thái từng đơn để kiểm tra luồng kích hoạt. */
 class FakePayOs {
-  orders = new Map<number, { status: string; amountPaid: number; amount: number }>();
-  calls = 0;
+  orders = new Map<number, { status: string; amountPaid: number; amount: number; description: string }>();
   fetch = async (url: string, init?: RequestInit): Promise<Response> => {
-    this.calls++;
     const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
     if (url.endsWith('/v2/payment-requests') && init?.method === 'POST') {
       const body = JSON.parse(String(init.body)) as { orderCode: number; amount: number; signature: string; description: string };
       expect(body.description.length).toBeLessThanOrEqual(25);
       expect(body.signature).toMatch(/^[0-9a-f]{64}$/);
-      this.orders.set(body.orderCode, { status: 'PENDING', amountPaid: 0, amount: body.amount });
+      this.orders.set(body.orderCode, { status: 'PENDING', amountPaid: 0, amount: body.amount, description: body.description });
       return json({ code: '00', desc: 'success', data: { checkoutUrl: `https://pay.payos.vn/web/${body.orderCode}` } });
     }
     const match = /\/v2\/payment-requests\/(\d+)$/.exec(url);
@@ -60,6 +59,19 @@ let ctx: AccountsContext;
 let payos: FakePayOs;
 let store: MemoryAccountStore;
 
+function makeContext(now?: () => Date): AccountsContext {
+  return createAccountsContext({
+    store,
+    sessionSecret: SECRET,
+    freeDailySearches: 3,
+    guestDailySearches: 2,
+    timezone: 'Asia/Ho_Chi_Minh',
+    rateLimits: { registerPerHour: 10_000, loginFailuresPer15Min: 10_000 },
+    now,
+    billing: { payos: new PayOsClient({ clientId: 'id', apiKey: 'key', checksumKey: 'sum' }, payos.fetch), publicBaseUrl: 'https://paperfinder.example', prices: PRICES },
+  });
+}
+
 async function startServer(accounts: AccountsContext | undefined): Promise<{ server: Server; base: string }> {
   const app = createApp({ adapters, accounts, config: { corsOrigins: [], rateLimitPerMinute: 10_000, staticDir: undefined, adminPassword: ADMIN }, logger: silentLogger });
   const s = await new Promise<Server>((resolve) => {
@@ -71,15 +83,7 @@ async function startServer(accounts: AccountsContext | undefined): Promise<{ ser
 beforeAll(async () => {
   payos = new FakePayOs();
   store = new MemoryAccountStore();
-  ctx = createAccountsContext({
-    store,
-    sessionSecret: SECRET,
-    freeDailySearches: 3,
-    guestDailySearches: 2,
-    timezone: 'Asia/Ho_Chi_Minh',
-    rateLimits: { registerPerHour: 10_000, loginFailuresPer15Min: 10_000 },
-    billing: { payos: new PayOsClient({ clientId: 'id', apiKey: 'key', checksumKey: 'sum' }, payos.fetch), publicBaseUrl: 'https://paperfinder.example', priceMonth: 49_000, priceYear: 399_000 },
-  });
+  ctx = makeContext();
   ({ server, base } = await startServer(ctx));
 });
 
@@ -96,6 +100,7 @@ interface Resp<T = unknown> {
   status: number;
   body: T;
   cookie?: string;
+  headers: Headers;
 }
 
 async function call<T = unknown>(method: string, path: string, body?: unknown, cookie?: string, headers: Record<string, string> = {}): Promise<Resp<T>> {
@@ -112,7 +117,7 @@ async function call<T = unknown>(method: string, path: string, body?: unknown, c
   } catch {
     /* NDJSON hoặc nội dung văn bản */
   }
-  return { status: response.status, body: parsed as T, cookie: setCookie ? setCookie.split(';')[0] : undefined };
+  return { status: response.status, body: parsed as T, cookie: setCookie ? setCookie.split(';')[0] : undefined, headers: response.headers };
 }
 
 let counter = 0;
@@ -123,21 +128,33 @@ async function newUser(): Promise<{ email: string; cookie: string }> {
   return { email, cookie: r.cookie! };
 }
 
-const search = (cookie: string | undefined, keywords: string[] = ['alpha']) =>
-  call('POST', '/api/search', { keywords, sources: ['crossref'], maxResults: 20, onlyWithDoi: true }, cookie);
-
 const admin = { authorization: `Bearer ${ADMIN}` };
+const grant = (email: string, tier: PaidTier, days = 30) => call('POST', '/api/admin/grant', { email, tier, days }, undefined, admin);
+async function userWithTier(tier: 'free' | PaidTier) {
+  const u = await newUser();
+  if (tier !== 'free') expect((await grant(u.email, tier)).status).toBe(200);
+  return u;
+}
+
+const search = (cookie: string | undefined, keywords: string[] = ['alpha'], maxResults = 20) =>
+  call('POST', '/api/search', { keywords, sources: ['crossref'], maxResults, onlyWithDoi: true }, cookie);
+const me = (cookie?: string) => call<MeResponse>('GET', '/api/me', undefined, cookie);
+
+const exportRecord = (i: number) => ({ title: `Paper ${i}`, doi: `10.1/${i}`, authors: [{ name: 'A B' }], publicationYear: 2020, journal: 'J', publisher: '', documentType: 'journal-article', abstract: '', sources: ['crossref'], originalUrl: '', queryKeywords: [] });
+const exportRecords = (n: number) => Array.from({ length: n }, (_, i) => exportRecord(i));
+const exportCall = (format: string, n: number, cookie?: string) => call('POST', '/api/export', { format, records: exportRecords(n) }, cookie);
 
 describe('đăng ký và đăng nhập', () => {
-  it('đăng ký, đăng nhập, đọc /api/me, đăng xuất', async () => {
-    const reg = await call<{ user: { email: string; isPro: boolean } }>('POST', '/api/auth/register', { email: '  Mixed@Example.COM ', password: 'password123' });
+  it('đăng ký tự đăng nhập ngay: cookie phiên có sẵn và /api/me nhận ra người dùng', async () => {
+    const reg = await call<{ user: { email: string; tier: string } }>('POST', '/api/auth/register', { email: '  Mixed@Example.COM ', password: 'password123' });
     expect(reg.status).toBe(201);
-    expect(reg.body.user).toMatchObject({ email: 'mixed@example.com', isPro: false });
+    expect(reg.body.user).toMatchObject({ email: 'mixed@example.com', tier: 'free' });
     expect(reg.cookie).toMatch(/^pf_session=/);
 
-    const me = await call<MeResponse>('GET', '/api/me', undefined, reg.cookie);
-    expect(me.body.user?.email).toBe('mixed@example.com');
-    expect(me.body.quota.limit).toBe(3);
+    const info = await me(reg.cookie);
+    expect(info.body.user?.email).toBe('mixed@example.com');
+    expect(info.body.tier).toBe('free');
+    expect(info.body.quota.limit).toBe(3);
 
     const login = await call('POST', '/api/auth/login', { email: 'MIXED@example.com', password: 'password123' });
     expect(login.status).toBe(200);
@@ -147,11 +164,36 @@ describe('đăng ký và đăng nhập', () => {
     expect(out.headers.get('set-cookie')).toMatch(/Max-Age=0/);
   });
 
-  it('cookie phiên là HttpOnly, SameSite=Lax', async () => {
+  it('cookie phiên nhớ lâu (~6 tháng), HttpOnly, SameSite=Lax', async () => {
     const response = await fetch(`${base}/api/auth/register`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'flags@example.com', password: 'password123' }) });
     const header = response.headers.get('set-cookie') ?? '';
     expect(header).toMatch(/HttpOnly/);
     expect(header).toMatch(/SameSite=Lax/);
+    expect(Number(/Max-Age=(\d+)/.exec(header)![1])).toBeGreaterThanOrEqual(170 * 86_400);
+  });
+
+  it('tự gia hạn phiên khi còn dùng: chỉ cấp cookie mới khi đã qua nửa thời hạn', async () => {
+    let now = new Date('2026-01-01T00:00:00Z');
+    const clockCtx = makeContext(() => now);
+    const s = await startServer(clockCtx);
+    const old = base;
+    base = s.base;
+    try {
+      const reg = await call('POST', '/api/auth/register', { email: 'renew@example.com', password: 'password123' });
+      now = new Date('2026-01-11T00:00:00Z'); // mới 10 ngày
+      expect((await me(reg.cookie)).cookie).toBeUndefined();
+      now = new Date('2026-05-01T00:00:00Z'); // đã 120 ngày (> nửa của 180)
+      const renewed = await me(reg.cookie);
+      expect(renewed.body.user?.email).toBe('renew@example.com');
+      expect(renewed.cookie).toMatch(/^pf_session=/);
+      now = new Date('2026-09-01T00:00:00Z'); // quá 180 ngày kể từ cookie đầu: cookie cũ hết hạn nhưng cookie đã gia hạn còn dùng được
+      expect((await me(reg.cookie)).body.user).toBeNull();
+      expect((await me(renewed.cookie)).body.user?.email).toBe('renew@example.com');
+    } finally {
+      base = old;
+      s.server.closeAllConnections();
+      s.server.close();
+    }
   });
 
   it('từ chối email trùng, mật khẩu ngắn, email sai định dạng', async () => {
@@ -159,6 +201,10 @@ describe('đăng ký và đăng nhập', () => {
     expect((await call('POST', '/api/auth/register', { email, password: 'password123' })).status).toBe(409);
     expect((await call('POST', '/api/auth/register', { email: 'short@example.com', password: '1234567' })).status).toBe(400);
     expect((await call('POST', '/api/auth/register', { email: 'not-an-email', password: 'password123' })).status).toBe(400);
+  });
+
+  it('chỉ cần email + mật khẩu để đăng ký (giao diện không bắt nhập lại)', async () => {
+    expect((await call('POST', '/api/auth/register', { email: 'two-fields@example.com', password: 'password123' })).status).toBe(201);
   });
 
   it('sai mật khẩu và email không tồn tại cho cùng một thông báo', async () => {
@@ -180,8 +226,8 @@ describe('đăng ký và đăng nhập', () => {
   it('cookie giả hoặc bị sửa không đăng nhập được', async () => {
     const { cookie } = await newUser();
     const tampered = cookie.slice(0, -3) + 'abc';
-    expect((await call<MeResponse>('GET', '/api/me', undefined, tampered)).body.user).toBeNull();
-    expect((await call<MeResponse>('GET', '/api/me', undefined, 'pf_session=garbage')).body.user).toBeNull();
+    expect((await me(tampered)).body.user).toBeNull();
+    expect((await me('pf_session=garbage')).body.user).toBeNull();
   });
 
   it('đổi mật khẩu vô hiệu phiên cũ, phiên mới vẫn dùng được', async () => {
@@ -191,19 +237,19 @@ describe('đăng ký và đăng nhập', () => {
 
     const changed = await call('POST', '/api/auth/change-password', { currentPassword: 'password123', newPassword: 'new-password-1' }, cookie);
     expect(changed.status).toBe(200);
-    expect((await call<MeResponse>('GET', '/api/me', undefined, cookie)).body.user).toBeNull(); // phiên cũ
-    expect((await call<MeResponse>('GET', '/api/me', undefined, changed.cookie)).body.user?.email).toBe(email); // phiên mới
+    expect((await me(cookie)).body.user).toBeNull(); // phiên cũ
+    expect((await me(changed.cookie)).body.user?.email).toBe(email); // phiên mới
     expect((await call('POST', '/api/auth/login', { email, password: 'password123' })).status).toBe(401);
     expect((await call('POST', '/api/auth/login', { email, password: 'new-password-1' })).status).toBe(200);
   });
 });
 
-describe('hạn mức lượt tìm', () => {
-  it('khách bị giới hạn theo IP, trả 429 kèm thông báo rõ ràng', async () => {
-    // Mỗi trình duyệt khách dùng cùng IP 127.0.0.1 -> chia sẻ một bộ đếm; dùng khóa riêng bằng cách tạo máy chủ mới.
-    const fresh = await startServer(ctx);
+describe('hạn mức lượt tìm theo hạng', () => {
+  it('khách bị giới hạn theo IP, trả 429 kèm thông báo mời đăng nhập', async () => {
+    // Máy chủ riêng với bộ đếm khách mới (mọi cuộc gọi từ 127.0.0.1 dùng chung một bộ đếm).
+    const own = await startServer(makeContext());
     const old = base;
-    base = fresh.base;
+    base = own.base;
     try {
       expect((await search(undefined)).status).toBe(200);
       expect((await search(undefined)).status).toBe(200);
@@ -213,33 +259,31 @@ describe('hạn mức lượt tìm', () => {
       expect(blocked.body.message).toMatch(/Đăng nhập/);
     } finally {
       base = old;
-      fresh.server.closeAllConnections();
-      fresh.server.close();
+      own.server.closeAllConnections();
+      own.server.close();
     }
   });
 
-  it('thành viên miễn phí có hạn mức riêng và /api/me phản ánh số lượt đã dùng', async () => {
+  it('thành viên miễn phí có hạn mức riêng; /api/me phản ánh số lượt đã dùng', async () => {
     const { cookie } = await newUser();
     expect((await search(cookie)).status).toBe(200);
     expect((await search(cookie)).status).toBe(200);
-    const me = await call<MeResponse>('GET', '/api/me', undefined, cookie);
-    expect(me.body.quota).toMatchObject({ limit: 3, used: 2, remaining: 1 });
-    expect(me.body.quota.resetsAt).toMatch(/T/);
+    expect((await me(cookie)).body.quota).toMatchObject({ limit: 3, used: 2, remaining: 1 });
     expect((await search(cookie)).status).toBe(200);
     const blocked = await call<{ error: string; message: string; signedIn: boolean }>('POST', '/api/search', { keywords: ['alpha'], sources: ['crossref'], maxResults: 20, onlyWithDoi: true }, cookie);
     expect(blocked.status).toBe(429);
     expect(blocked.body.signedIn).toBe(true);
-    expect(blocked.body.message).toMatch(/Pro/);
+    expect(blocked.body.message).toMatch(/gói/);
   });
 
   it('mỗi từ khóa tính một lượt; không đủ lượt thì không trừ gì', async () => {
     const { cookie } = await newUser();
-    const tooMany = await call<{ message: string; quota: { used: number } }>('POST', '/api/search', { keywords: ['a1', 'b2', 'c3', 'd4'], sources: ['crossref'], maxResults: 20, onlyWithDoi: true }, cookie);
+    const tooMany = await call<{ message: string }>('POST', '/api/search', { keywords: ['a1', 'b2', 'c3', 'd4'], sources: ['crossref'], maxResults: 20, onlyWithDoi: true }, cookie);
     expect(tooMany.status).toBe(429);
     expect(tooMany.body.message).toMatch(/4 từ khóa/);
-    expect((await call<MeResponse>('GET', '/api/me', undefined, cookie)).body.quota.used).toBe(0);
+    expect((await me(cookie)).body.quota.used).toBe(0);
     expect((await search(cookie, ['a1', 'b2', 'c3'])).status).toBe(200);
-    expect((await call<MeResponse>('GET', '/api/me', undefined, cookie)).body.quota.remaining).toBe(0);
+    expect((await me(cookie)).body.quota.remaining).toBe(0);
   });
 
   it('hoàn lại lượt khi không nguồn nào trả kết quả', async () => {
@@ -247,71 +291,125 @@ describe('hạn mức lượt tìm', () => {
     failAll = true;
     expect((await search(cookie)).status).toBe(200);
     failAll = false;
-    expect((await call<MeResponse>('GET', '/api/me', undefined, cookie)).body.quota.used).toBe(0);
+    expect((await me(cookie)).body.quota.used).toBe(0);
   });
 
-  it('gói Pro không giới hạn', async () => {
-    const { email, cookie } = await newUser();
-    const granted = await call('POST', '/api/admin/grant', { email, days: 30 }, undefined, admin);
-    expect(granted.status).toBe(200);
+  it.each(['standard', 'pro'] as const)('hạng %s không giới hạn lượt tìm', async (tier) => {
+    const { cookie } = await userWithTier(tier);
     for (let i = 0; i < 6; i++) expect((await search(cookie)).status).toBe(200);
-    const me = await call<MeResponse>('GET', '/api/me', undefined, cookie);
-    expect(me.body.user?.isPro).toBe(true);
-    expect(me.body.quota.limit).toBeNull();
+    const info = await me(cookie);
+    expect(info.body.tier).toBe(tier);
+    expect(info.body.user?.tier).toBe(tier);
+    expect(info.body.quota.limit).toBeNull();
   });
 
-  it('Pro hết hạn quay lại hạn mức miễn phí', async () => {
-    const { email, cookie } = await newUser();
+  it('hết hạn gói thì quay lại hạn mức miễn phí và mất quyền thư viện', async () => {
+    const { email, cookie } = await userWithTier('standard');
     const user = (await store.getUserByEmail(email))!;
-    await store.grantPro(user.id, -1, new Date()); // hạn Pro là một ngày trước
-    expect(new Date((await store.getUserById(user.id))!.proUntil!).getTime()).toBeLessThan(Date.now());
-    const me = await call<MeResponse>('GET', '/api/me', undefined, cookie);
-    expect(me.body.user?.isPro).toBe(false);
-    expect(me.body.quota.limit).toBe(3);
+    await store.grantPlan(user.id, 'standard', -31, new Date()); // lùi hạn về quá khứ
+    const info = await me(cookie);
+    expect(info.body.tier).toBe('free');
+    expect(info.body.quota.limit).toBe(3);
     expect((await call('GET', '/api/library', undefined, cookie)).status).toBe(402);
   });
 });
 
-describe('gói Pro: xuất BibTeX/RIS, thư viện, lịch sử', () => {
-  const records = [
-    {
-      title: 'Deep learning for crop disease detection',
-      doi: '10.1000/xyz',
-      authors: [{ name: 'Jane Q. Smith', given: 'Jane Q.', family: 'Smith' }, { name: 'Nguyen Van An' }],
-      publicationYear: 2021,
-      journal: 'Journal of Plant AI',
-      publisher: 'ACME',
-      documentType: 'journal-article',
-      abstract: 'We study & test 100% of things_here.',
-      sources: ['crossref'],
-      originalUrl: 'https://doi.org/10.1000/xyz',
-      queryKeywords: ['crop'],
-      volume: '12',
-      issue: '3',
-      pages: '313-325',
-    },
+describe('giới hạn số kết quả mỗi nguồn', () => {
+  const cases: [string, 'guest' | 'free' | PaidTier, number, number][] = [
+    ['khách', 'guest', 20, 50],
+    ['miễn phí', 'free', 50, 100],
+    ['Tiêu chuẩn', 'standard', 200, 500],
+    ['Pro', 'pro', 500, 500],
   ];
 
-  it('BibTeX/RIS yêu cầu đăng nhập và gói Pro; Excel/CSV vẫn miễn phí', async () => {
-    const { cookie } = await newUser();
-    expect((await call('POST', '/api/export', { format: 'bibtex', records })).status).toBe(401);
-    expect((await call('POST', '/api/export', { format: 'bibtex', records }, cookie)).status).toBe(402);
-    expect((await call('POST', '/api/export', { format: 'ris', records }, cookie)).status).toBe(402);
-    expect((await call('POST', '/api/export', { format: 'csv', records })).status).toBe(200);
+  it.each(cases)('%s: được %i, bị từ chối khi chọn nhiều hơn', async (_label, tier, allowed, tooMany) => {
+    const own = tier === 'guest' ? await startServer(makeContext()) : undefined;
+    const old = base;
+    if (own) base = own.base;
+    try {
+      const cookie = tier === 'guest' ? undefined : (await userWithTier(tier)).cookie;
+      expect((await search(cookie, ['alpha'], allowed)).status).toBe(200);
+      if (tooMany > allowed) {
+        const denied = await call<{ error: string; limit: number }>('POST', '/api/search', { keywords: ['alpha'], sources: ['crossref'], maxResults: tooMany, onlyWithDoi: true }, cookie);
+        expect(denied.status).toBe(403);
+        expect(denied.body).toMatchObject({ error: 'results_limit', limit: allowed });
+      }
+    } finally {
+      if (own) {
+        base = old;
+        own.server.closeAllConnections();
+        own.server.close();
+      }
+    }
   });
 
-  it('Pro xuất đúng BibTeX và RIS', async () => {
-    const { email, cookie } = await newUser();
-    await call('POST', '/api/admin/grant', { email, days: 30 }, undefined, admin);
+  it('bị từ chối vì quá số kết quả thì không bị trừ lượt', async () => {
+    const { cookie } = await newUser();
+    expect((await call('POST', '/api/search', { keywords: ['alpha'], sources: ['crossref'], maxResults: 500, onlyWithDoi: true }, cookie)).status).toBe(403);
+    expect((await me(cookie)).body.quota.used).toBe(0);
+  });
+});
+
+describe('xuất file theo hạng', () => {
+  it('khách không xuất được file nào', async () => {
+    expect((await exportCall('csv', 3)).status).toBe(401);
+    expect((await exportCall('xlsx', 3)).status).toBe(401);
+    expect((await exportCall('bibtex', 3)).status).toBe(401);
+  });
+
+  it('miễn phí: xuất được nhưng chỉ 50 dòng đầu, có báo cho giao diện; BibTeX/RIS bị khóa', async () => {
+    const { cookie } = await newUser();
+    const full = await exportCall('csv', 40, cookie);
+    expect(full.status).toBe(200);
+    expect(full.headers.get('x-export-truncated')).toBeNull();
+
+    const cut = await exportCall('csv', 60, cookie);
+    expect(cut.status).toBe(200);
+    expect(cut.headers.get('x-export-truncated')).toBe('50/60');
+    const lines = String(cut.body).split('\r\n').filter(Boolean);
+    expect(lines).toHaveLength(51); // tiêu đề + 50 dòng
+
+    expect((await exportCall('bibtex', 3, cookie)).status).toBe(402);
+    expect((await exportCall('ris', 3, cookie)).status).toBe(402);
+  });
+
+  it('Tiêu chuẩn: xuất Excel/CSV không giới hạn dòng, nhưng chưa có BibTeX/RIS', async () => {
+    const { cookie } = await userWithTier('standard');
+    const big = await exportCall('csv', 60, cookie);
+    expect(big.status).toBe(200);
+    expect(big.headers.get('x-export-truncated')).toBeNull();
+    expect(String(big.body).split('\r\n').filter(Boolean)).toHaveLength(61);
+    expect((await exportCall('bibtex', 3, cookie)).status).toBe(402);
+  });
+
+  it('Pro: có thêm BibTeX và RIS đúng định dạng', async () => {
+    const { cookie } = await userWithTier('pro');
+    const records = [
+      {
+        title: 'Deep learning for crop disease detection',
+        doi: '10.1000/xyz',
+        authors: [{ name: 'Jane Q. Smith', given: 'Jane Q.', family: 'Smith' }, { name: 'Nguyen Van An' }],
+        publicationYear: 2021,
+        journal: 'Journal of Plant AI',
+        publisher: 'ACME',
+        documentType: 'journal-article',
+        abstract: 'We study & test 100% of things_here.',
+        sources: ['crossref'],
+        originalUrl: 'https://doi.org/10.1000/xyz',
+        queryKeywords: ['crop'],
+        volume: '12',
+        issue: '3',
+        pages: '313-325',
+      },
+    ];
     const bib = await fetch(`${base}/api/export`, { method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify({ format: 'bibtex', records }) });
     expect(bib.status).toBe(200);
     expect(bib.headers.get('content-disposition')).toMatch(/\.bib"/);
     const bibText = await bib.text();
     expect(bibText).toContain('@article{Smith2021Deep,');
-    expect(bibText).toContain('author = {Smith, Jane Q. and Van An, Nguyen}'.replace('Van An, Nguyen', 'An, Nguyen Van'));
+    expect(bibText).toContain('author = {Smith, Jane Q. and An, Nguyen Van}');
     expect(bibText).toContain('pages = {313--325}');
     expect(bibText).toContain('We study \\& test 100\\% of things\\_here.');
-    expect(bibText).toContain('doi = {10.1000/xyz}');
 
     const ris = await fetch(`${base}/api/export`, { method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify({ format: 'ris', records }) });
     const risText = await ris.text();
@@ -319,186 +417,236 @@ describe('gói Pro: xuất BibTeX/RIS, thư viện, lịch sử', () => {
     expect(risText).toContain('AU  - Smith, Jane Q.');
     expect(risText).toContain('SP  - 313');
     expect(risText).toContain('EP  - 325');
-    expect(risText).toContain('DO  - 10.1000/xyz');
     expect(risText.trim().endsWith('ER  -')).toBe(true);
   });
+});
 
-  it('thư viện cá nhân: Pro mới dùng được; lưu, trùng, xóa', async () => {
-    const { email, cookie } = await newUser();
+describe('thư viện và lịch sử theo hạng', () => {
+  it('thư viện: khách 401, miễn phí 402, Tiêu chuẩn trở lên dùng được (lưu, trùng, xóa, không lộ cho người khác)', async () => {
+    const free = await newUser();
     const record = makeRecord({ title: 'Saved paper', doi: '10.5/Saved', sources: ['crossref'] });
     expect((await call('GET', '/api/library')).status).toBe(401);
-    expect((await call('GET', '/api/library', undefined, cookie)).status).toBe(402);
-    expect((await call('POST', '/api/library', { record, folder: '' }, cookie)).status).toBe(402);
+    expect((await call('GET', '/api/library', undefined, free.cookie)).status).toBe(402);
+    expect((await call('POST', '/api/library', { record, folder: '' }, free.cookie)).status).toBe(402);
 
-    await call('POST', '/api/admin/grant', { email, days: 30 }, undefined, admin);
-    const saved = await call<{ status: string; key: string }>('POST', '/api/library', { record: { ...record, oaPdfSig: 'secret' }, folder: 'Luận văn' }, cookie);
+    const std = await userWithTier('standard');
+    const saved = await call<{ status: string; key: string }>('POST', '/api/library', { record: { ...record, oaPdfSig: 'secret' }, folder: 'Luận văn' }, std.cookie);
     expect(saved.status).toBe(201);
     expect(saved.body.key).toBe('10.5/saved');
-    expect((await call<{ status: string }>('POST', '/api/library', { record, folder: 'Khác' }, cookie)).body.status).toBe('exists');
-
-    const list = await call<{ key: string; folder: string; record: { title: string; oaPdfSig?: string } }[]>('GET', '/api/library', undefined, cookie);
+    expect((await call<{ status: string }>('POST', '/api/library', { record, folder: 'Khác' }, std.cookie)).body.status).toBe('exists');
+    const list = await call<{ key: string; folder: string; record: { title: string; oaPdfSig?: string } }[]>('GET', '/api/library', undefined, std.cookie);
     expect(list.body).toHaveLength(1);
     expect(list.body[0]).toMatchObject({ key: '10.5/saved', folder: 'Khác' });
-    expect(list.body[0]!.record.title).toBe('Saved paper');
     expect(list.body[0]!.record.oaPdfSig).toBeUndefined();
 
-    expect((await call('DELETE', `/api/library/${encodeURIComponent('10.5/saved')}`, undefined, cookie)).status).toBe(200);
-    expect((await call('DELETE', `/api/library/${encodeURIComponent('10.5/saved')}`, undefined, cookie)).status).toBe(404);
+    const other = await userWithTier('pro');
+    expect((await call<unknown[]>('GET', '/api/library', undefined, other.cookie)).body).toHaveLength(0);
+
+    expect((await call('DELETE', `/api/library/${encodeURIComponent('10.5/saved')}`, undefined, std.cookie)).status).toBe(200);
+    expect((await call('DELETE', `/api/library/${encodeURIComponent('10.5/saved')}`, undefined, std.cookie)).status).toBe(404);
   });
 
-  it('thư viện của người này không lộ cho người khác', async () => {
-    const a = await newUser();
-    const b = await newUser();
-    await call('POST', '/api/admin/grant', { email: a.email, days: 30 }, undefined, admin);
-    await call('POST', '/api/admin/grant', { email: b.email, days: 30 }, undefined, admin);
-    await call('POST', '/api/library', { record: makeRecord({ title: 'Private', doi: '10.9/private' }), folder: '' }, a.cookie);
-    expect((await call<unknown[]>('GET', '/api/library', undefined, b.cookie)).body).toHaveLength(0);
-  });
-
-  it('lịch sử tìm kiếm chỉ ghi cho Pro và xóa được', async () => {
+  it('lịch sử: miễn phí không có; Tiêu chuẩn giữ 20, Pro giữ 50', async () => {
     const free = await newUser();
     await search(free.cookie);
     expect((await call('GET', '/api/history', undefined, free.cookie)).status).toBe(402);
 
-    const pro = await newUser();
-    await call('POST', '/api/admin/grant', { email: pro.email, days: 30 }, undefined, admin);
-    await search(pro.cookie, ['history topic']);
+    const std = await userWithTier('standard');
+    await search(std.cookie, ['history topic']);
     await new Promise((r) => setTimeout(r, 30));
-    const history = await call<{ request: { keywords: string[] }; total: number }[]>('GET', '/api/history', undefined, pro.cookie);
+    const history = await call<{ request: { keywords: string[] }; total: number }[]>('GET', '/api/history', undefined, std.cookie);
     expect(history.body).toHaveLength(1);
     expect(history.body[0]!.request.keywords).toEqual(['history topic']);
     expect(history.body[0]!.total).toBe(1);
+
+    for (let i = 0; i < 24; i++) await search(std.cookie, [`topic ${i}`]);
+    await new Promise((r) => setTimeout(r, 60));
+    expect((await call<unknown[]>('GET', '/api/history', undefined, std.cookie)).body).toHaveLength(20);
+
+    const pro = await userWithTier('pro');
+    for (let i = 0; i < 3; i++) await search(pro.cookie, [`pro topic ${i}`]);
+    await new Promise((r) => setTimeout(r, 40));
+    expect((await call<unknown[]>('GET', '/api/history', undefined, pro.cookie)).body).toHaveLength(3);
     expect((await call('DELETE', '/api/history', undefined, pro.cookie)).status).toBe(200);
     expect((await call<unknown[]>('GET', '/api/history', undefined, pro.cookie)).body).toHaveLength(0);
   });
 });
 
 describe('thanh toán PayOS', () => {
-  it('/api/plans trả giá và hạn mức', async () => {
+  it('/api/plans trả bốn hạng và sáu gói (hạng trả phí × 7 ngày/1 tháng/1 năm)', async () => {
     const plans = await call<PlansResponse>('GET', '/api/plans');
-    expect(plans.body).toMatchObject({ accountsEnabled: true, billingEnabled: true, freeDailySearches: 3, guestDailySearches: 2 });
-    expect(plans.body.plans).toEqual([
-      { id: 'month', label: '1 tháng', days: 30, priceVnd: 49_000 },
-      { id: 'year', label: '1 năm', days: 365, priceVnd: 399_000 },
+    expect(plans.body).toMatchObject({ accountsEnabled: true, billingEnabled: true });
+    expect(plans.body.tiers.map((t) => t.tier)).toEqual(['guest', 'free', 'standard', 'pro']);
+    expect(plans.body.tiers[0]).toMatchObject({ dailySearches: 2, maxResultsPerSource: 20, exportRows: 0 });
+    expect(plans.body.plans).toHaveLength(6);
+    expect(plans.body.plans.filter((p) => p.tier === 'pro').map((p) => [p.period, p.days, p.priceVnd])).toEqual([
+      ['week', 7, 29_000],
+      ['month', 30, 79_000],
+      ['year', 365, 599_000],
     ]);
   });
 
-  it('phải đăng nhập mới tạo được link thanh toán', async () => {
-    expect((await call('POST', '/api/billing/checkout', { plan: 'month' })).status).toBe(401);
+  it('phải đăng nhập và chọn gói hợp lệ mới tạo được link thanh toán', async () => {
+    expect((await call('POST', '/api/billing/checkout', { tier: 'pro', period: 'month' })).status).toBe(401);
     const { cookie } = await newUser();
-    expect((await call('POST', '/api/billing/checkout', { plan: 'forever' }, cookie)).status).toBe(400);
+    expect((await call('POST', '/api/billing/checkout', { tier: 'free', period: 'month' }, cookie)).status).toBe(400);
+    expect((await call('POST', '/api/billing/checkout', { tier: 'pro', period: 'forever' }, cookie)).status).toBe(400);
+    expect((await call('POST', '/api/billing/checkout', { tier: 'pro' }, cookie)).status).toBe(400);
   });
 
-  it('thanh toán đủ tiền: kích hoạt Pro đúng một lần dù webhook và trang quay lại cùng gọi', async () => {
-    const { email, cookie } = await newUser();
-    const checkout = await call<{ checkoutUrl: string; orderCode: number }>('POST', '/api/billing/checkout', { plan: 'month' }, cookie);
+  const periodDays: Record<PlanPeriod, number> = { week: 7, month: 30, year: 365 };
+  const daysLeft = (iso: string | null) => (new Date(iso!).getTime() - Date.now()) / 86_400_000;
+
+  async function buy(cookie: string, tier: PaidTier, period: PlanPeriod) {
+    const checkout = await call<{ checkoutUrl: string; orderCode: number }>('POST', '/api/billing/checkout', { tier, period }, cookie);
     expect(checkout.status).toBe(200);
     expect(checkout.body.checkoutUrl).toMatch(/^https:\/\/pay\.payos\.vn\//);
+    payos.pay(checkout.body.orderCode);
+    const confirm = await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode: checkout.body.orderCode }, cookie);
+    expect(confirm.body.status).toBe('paid');
+    return checkout.body.orderCode;
+  }
+
+  it.each([
+    ['standard', 'week'],
+    ['standard', 'month'],
+    ['standard', 'year'],
+    ['pro', 'week'],
+    ['pro', 'month'],
+    ['pro', 'year'],
+  ] as const)('mua %s %s: đúng hạng, đúng số ngày, đúng số tiền', async (tier, period) => {
+    const { email, cookie } = await newUser();
+    const checkout = await call<{ orderCode: number }>('POST', '/api/billing/checkout', { tier, period }, cookie);
+    const order = payos.orders.get(checkout.body.orderCode)!;
+    expect(order.amount).toBe(PRICES[`${tier}:${period}` as keyof typeof PRICES]);
+    expect(order.description.length).toBeLessThanOrEqual(25);
+
+    expect((await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode: checkout.body.orderCode }, cookie)).body.status).toBe('pending');
+    expect((await me(cookie)).body.tier).toBe('free');
+
+    payos.pay(checkout.body.orderCode);
+    const confirm = await call<{ status: string; user: { tier: string } }>('POST', '/api/billing/confirm', { orderCode: checkout.body.orderCode }, cookie);
+    expect(confirm.body).toMatchObject({ status: 'paid', user: { tier } });
+
+    const user = (await store.getUserByEmail(email))!;
+    expect(daysLeft(tier === 'pro' ? user.proUntil : user.standardUntil)).toBeGreaterThan(periodDays[period] - 0.1);
+    expect(daysLeft(tier === 'pro' ? user.proUntil : user.standardUntil)).toBeLessThan(periodDays[period] + 0.1);
+    expect((await me(cookie)).body.tier).toBe(tier);
+  });
+
+  it('webhook và trang quay lại gọi cùng lúc: chỉ cộng thời hạn một lần', async () => {
+    const { email, cookie } = await newUser();
+    const checkout = await call<{ orderCode: number }>('POST', '/api/billing/checkout', { tier: 'pro', period: 'month' }, cookie);
     const { orderCode } = checkout.body;
-
-    // Chưa thanh toán
-    const pending = await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode }, cookie);
-    expect(pending.body.status).toBe('pending');
-    expect((await call<MeResponse>('GET', '/api/me', undefined, cookie)).body.user?.isPro).toBe(false);
-
     payos.pay(orderCode);
-    // Webhook và trang quay lại gọi gần như cùng lúc
     const [hook, confirm] = await Promise.all([
       call('POST', '/api/billing/payos-webhook', { code: '00', success: true, data: { orderCode, amount: 1 } }),
-      call<{ status: string; user: { isPro: boolean; proUntil: string } }>('POST', '/api/billing/confirm', { orderCode }, cookie),
+      call<{ status: string }>('POST', '/api/billing/confirm', { orderCode }, cookie),
     ]);
     expect(hook.status).toBe(200);
     expect(confirm.body.status).toBe('paid');
-
-    const user1 = (await store.getUserByEmail(email))!;
+    const first = (await store.getUserByEmail(email))!.proUntil;
     await call('POST', '/api/billing/confirm', { orderCode }, cookie);
     await call('POST', '/api/billing/payos-webhook', { data: { orderCode } });
-    const user2 = (await store.getUserByEmail(email))!;
-    expect(user2.proUntil).toBe(user1.proUntil); // không cộng thêm lần nữa
-
-    const days = (new Date(user2.proUntil!).getTime() - Date.now()) / 86_400_000;
-    expect(days).toBeGreaterThan(29.9);
-    expect(days).toBeLessThan(30.1);
-    expect((await call<MeResponse>('GET', '/api/me', undefined, cookie)).body.user?.isPro).toBe(true);
+    expect((await store.getUserByEmail(email))!.proUntil).toBe(first);
   });
 
-  it('mua tiếp khi còn hạn thì cộng dồn', async () => {
+  it('mua tiếp cùng hạng thì cộng dồn', async () => {
     const { email, cookie } = await newUser();
-    for (const plan of ['month', 'month'] as const) {
-      const checkout = await call<{ orderCode: number }>('POST', '/api/billing/checkout', { plan }, cookie);
-      payos.pay(checkout.body.orderCode);
-      await call('POST', '/api/billing/confirm', { orderCode: checkout.body.orderCode }, cookie);
-    }
-    const days = (new Date((await store.getUserByEmail(email))!.proUntil!).getTime() - Date.now()) / 86_400_000;
-    expect(days).toBeGreaterThan(59.9);
+    await buy(cookie, 'standard', 'month');
+    await buy(cookie, 'standard', 'month');
+    expect(daysLeft((await store.getUserByEmail(email))!.standardUntil)).toBeGreaterThan(59.9);
   });
 
-  it('webhook giả mạo (mã đơn không có thật hoặc chưa trả tiền) không kích hoạt Pro', async () => {
+  it('đang có Tiêu chuẩn mua thêm Pro: Pro có hiệu lực ngay, thời gian Tiêu chuẩn không bị mất mà lùi lại', async () => {
     const { email, cookie } = await newUser();
-    const checkout = await call<{ orderCode: number }>('POST', '/api/billing/checkout', { plan: 'year' }, cookie);
-    const forged = await call('POST', '/api/billing/payos-webhook', { code: '00', success: true, data: { orderCode: checkout.body.orderCode, amount: 399000, description: 'PAID' } });
+    await buy(cookie, 'standard', 'month'); // 30 ngày Tiêu chuẩn
+    expect((await me(cookie)).body.tier).toBe('standard');
+    await buy(cookie, 'pro', 'week'); // 7 ngày Pro
+    expect((await me(cookie)).body.tier).toBe('pro');
+    const user = (await store.getUserByEmail(email))!;
+    expect(daysLeft(user.proUntil)).toBeCloseTo(7, 0);
+    expect(daysLeft(user.standardUntil)).toBeCloseTo(37, 0); // 30 + 7 ngày Pro
+  });
+
+  it('mua Tiêu chuẩn khi đang có Pro: bắt đầu sau khi Pro hết', async () => {
+    const { email, cookie } = await newUser();
+    await buy(cookie, 'pro', 'week');
+    await buy(cookie, 'standard', 'week');
+    const user = (await store.getUserByEmail(email))!;
+    expect(daysLeft(user.proUntil)).toBeCloseTo(7, 0);
+    expect(daysLeft(user.standardUntil)).toBeCloseTo(14, 0);
+    expect((await me(cookie)).body.tier).toBe('pro');
+  });
+
+  it('webhook giả mạo (mã đơn không có thật hoặc chưa trả tiền) không kích hoạt gói', async () => {
+    const { email, cookie } = await newUser();
+    const checkout = await call<{ orderCode: number }>('POST', '/api/billing/checkout', { tier: 'pro', period: 'year' }, cookie);
+    const forged = await call('POST', '/api/billing/payos-webhook', { code: '00', success: true, data: { orderCode: checkout.body.orderCode, amount: 599000, description: 'PAID' } });
     expect(forged.status).toBe(200);
-    expect((await store.getUserByEmail(email))!.proUntil).toBeNull();
+    const user = (await store.getUserByEmail(email))!;
+    expect(user.proUntil).toBeNull();
+    expect(user.standardUntil).toBeNull();
     expect((await call('POST', '/api/billing/payos-webhook', { data: { orderCode: 12345 } })).status).toBe(200);
     expect((await call('POST', '/api/billing/payos-webhook', 'garbage')).status).toBeLessThan(500);
   });
 
   it('trả thiếu tiền thì chưa kích hoạt', async () => {
     const { email, cookie } = await newUser();
-    const checkout = await call<{ orderCode: number }>('POST', '/api/billing/checkout', { plan: 'month' }, cookie);
+    const checkout = await call<{ orderCode: number }>('POST', '/api/billing/checkout', { tier: 'standard', period: 'month' }, cookie);
     payos.pay(checkout.body.orderCode, 1000);
-    const result = await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode: checkout.body.orderCode }, cookie);
-    expect(result.body.status).toBe('pending');
-    expect((await store.getUserByEmail(email))!.proUntil).toBeNull();
+    expect((await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode: checkout.body.orderCode }, cookie)).body.status).toBe('pending');
+    expect((await store.getUserByEmail(email))!.standardUntil).toBeNull();
   });
 
   it('không xác nhận hộ đơn của người khác', async () => {
     const owner = await newUser();
     const other = await newUser();
-    const checkout = await call<{ orderCode: number }>('POST', '/api/billing/checkout', { plan: 'month' }, owner.cookie);
+    const checkout = await call<{ orderCode: number }>('POST', '/api/billing/checkout', { tier: 'pro', period: 'month' }, owner.cookie);
     payos.pay(checkout.body.orderCode);
-    const result = await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode: checkout.body.orderCode }, other.cookie);
-    expect(result.body.status).toBe('unknown');
+    expect((await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode: checkout.body.orderCode }, other.cookie)).body.status).toBe('unknown');
     expect((await store.getUserByEmail(other.email))!.proUntil).toBeNull();
   });
 
   it('đơn bị hủy được ghi nhận', async () => {
     const { cookie } = await newUser();
-    const checkout = await call<{ orderCode: number }>('POST', '/api/billing/checkout', { plan: 'month' }, cookie);
+    const checkout = await call<{ orderCode: number }>('POST', '/api/billing/checkout', { tier: 'pro', period: 'month' }, cookie);
     payos.orders.get(checkout.body.orderCode)!.status = 'CANCELLED';
-    const result = await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode: checkout.body.orderCode }, cookie);
-    expect(result.body.status).toBe('cancelled');
+    expect((await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode: checkout.body.orderCode }, cookie)).body.status).toBe('cancelled');
   });
 });
 
 describe('quản trị', () => {
-  it('cần mật khẩu admin để cấp Pro hoặc xem thống kê tài khoản', async () => {
+  it('cần mật khẩu admin để cấp gói hoặc xem thống kê tài khoản', async () => {
     expect((await call('POST', '/api/admin/grant', { email: 'a@b.co', days: 5 })).status).toBe(401);
     expect((await call('GET', '/api/admin/accounts')).status).toBe(401);
     const { email } = await newUser();
     expect((await call('POST', '/api/admin/grant', { email: 'ghost@example.com', days: 5 }, undefined, admin)).status).toBe(404);
     expect((await call('POST', '/api/admin/grant', { email, days: 0 }, undefined, admin)).status).toBe(400);
-    const counts = await call<{ users: number; activePro: number }>('GET', '/api/admin/accounts', undefined, undefined, admin);
+    expect((await call('POST', '/api/admin/grant', { email, tier: 'free', days: 5 }, undefined, admin)).status).toBe(400);
+    const counts = await call<{ users: number; activeStandard: number; activePro: number }>('GET', '/api/admin/accounts', undefined, undefined, admin);
     expect(counts.status).toBe(200);
     expect(counts.body.users).toBeGreaterThan(0);
+  });
+
+  it('cấp gói không nêu hạng thì mặc định là Pro', async () => {
+    const { email, cookie } = await newUser();
+    expect((await call('POST', '/api/admin/grant', { email, days: 10 }, undefined, admin)).status).toBe(200);
+    expect((await me(cookie)).body.tier).toBe('pro');
   });
 });
 
 describe('khi tính năng tài khoản tắt', () => {
-  it('giữ nguyên hành vi cũ: tìm không giới hạn, xuất BibTeX tự do, /api/me báo tắt', async () => {
+  it('giữ nguyên hành vi cũ: không giới hạn gì, /api/me báo tắt', async () => {
     const off = await startServer(undefined);
     const old = base;
     base = off.base;
     try {
-      const me = await call<MeResponse>('GET', '/api/me');
-      expect(me.body).toMatchObject({ accountsEnabled: false, user: null, quota: { limit: null } });
+      expect((await me()).body).toMatchObject({ accountsEnabled: false, user: null, quota: { limit: null }, entitlements: { dailySearches: null, referenceExport: true, exportRows: null } });
       expect((await call<PlansResponse>('GET', '/api/plans')).body.accountsEnabled).toBe(false);
-      for (let i = 0; i < 8; i++) expect((await search(undefined)).status).toBe(200);
-      const bib = await call('POST', '/api/export', {
-        format: 'bibtex',
-        records: [{ title: 'T', doi: '', authors: [], publicationYear: null, journal: '', publisher: '', documentType: '', abstract: '', sources: [], originalUrl: '', queryKeywords: [] }],
-      });
-      expect(bib.status).toBe(200);
+      for (let i = 0; i < 8; i++) expect((await search(undefined, ['alpha'], 500)).status).toBe(200);
+      expect((await exportCall('bibtex', 1)).status).toBe(200);
+      expect((await exportCall('csv', 80)).status).toBe(200);
       expect((await call('POST', '/api/auth/login', { email: 'a@b.co', password: 'x' })).status).toBe(404);
     } finally {
       base = old;

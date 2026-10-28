@@ -1,4 +1,4 @@
-import { CrownFilled, FileExcelOutlined, FileTextOutlined } from '@ant-design/icons';
+import { CrownFilled, FileExcelOutlined, FileTextOutlined, LockOutlined } from '@ant-design/icons';
 import { Alert, Button, Checkbox, Radio, Space, Tag, Typography, message } from 'antd';
 import { useMemo, useState } from 'react';
 import type { ExportFormat, PaperRecord } from '../../../shared/types';
@@ -22,27 +22,40 @@ export function ExportPanel({ allRecords, filtered, selectedIds, online }: Props
   const [busy, setBusy] = useState<ExportFormat | null>(null);
   const [messageApi, contextHolder] = message.useMessage();
   const account = useAccount();
-  /** Khi tài khoản được bật, BibTeX/RIS chỉ dành cho gói Pro. */
-  const proLocked = account.enabled && !account.isPro;
+  const { entitlements, user } = account;
+  /** Khóa theo hạng chỉ có khi máy chủ bật tài khoản (tắt = mọi thứ mở như trước). */
+  const gated = account.enabled;
+  const needLogin = gated && entitlements.exportRows === 0;
+  const referenceLocked = gated && !entitlements.referenceExport;
+  const rowCap = gated ? entitlements.exportRows : null;
 
   const selected = useMemo(() => allRecords.filter((r) => selectedIds.has(r.id)), [allRecords, selectedIds]);
   const base = scope === 'all' ? allRecords : scope === 'selected' ? selected : filtered;
   const toExport = useMemo(() => (onlyDoi ? base.filter((r) => r.doi) : base), [base, onlyDoi]);
   const withoutDoiCount = base.length - base.filter((r) => r.doi).length;
+  const willCut = rowCap !== null && rowCap > 0 && toExport.length > rowCap;
 
   const run = async (format: ExportFormat) => {
-    if (proLocked && (format === 'bibtex' || format === 'ris')) {
-      if (account.user) account.openUpgrade('Xuất BibTeX/RIS (cho Zotero, Mendeley, EndNote) dành cho gói Pro.');
-      else account.openAuth('register');
+    const reference = format === 'bibtex' || format === 'ris';
+    if (gated && !user && (reference || needLogin)) {
+      account.openAuth('register');
+      return;
+    }
+    if (reference && referenceLocked) {
+      account.openUpgrade('Xuất BibTeX/RIS (cho Zotero, Mendeley, EndNote) dành cho hạng Pro.', 'pro');
       return;
     }
     setBusy(format);
     const fileName = exportFileName(format);
     try {
-      await exportRecords(format, toExport, fileName);
-      void messageApi.success(`Đã xuất ${toExport.length} bài vào file ${fileName}`);
+      const outcome = await exportRecords(format, toExport, fileName);
+      if (outcome.truncated) {
+        void messageApi.warning(`Hạng ${entitlements.label} chỉ xuất ${outcome.truncated.rows}/${outcome.truncated.total} dòng đầu. Mua gói để xuất đủ.`, 7);
+      } else {
+        void messageApi.success(`Đã xuất ${toExport.length} bài vào file ${fileName}`);
+      }
     } catch (error) {
-      if (error instanceof ApiError && error.code === 'pro_required') account.openUpgrade(error.message);
+      if (error instanceof ApiError && error.code === 'plan_required') account.openUpgrade(error.message, 'pro');
       else if (error instanceof ApiError && error.code === 'unauthorized') account.openAuth('login');
       else void messageApi.error(error instanceof Error ? `Xuất file thất bại: ${error.message}` : 'Xuất file thất bại.');
     } finally {
@@ -50,8 +63,15 @@ export function ExportPanel({ allRecords, filtered, selectedIds, online }: Props
     }
   };
 
+  const disabled = toExport.length === 0 || busy !== null || !online;
+  const lockTag = (text: string) => (
+    <Tag color="gold" icon={<LockOutlined />} style={{ marginInlineStart: 6, marginInlineEnd: 0 }}>
+      {text}
+    </Tag>
+  );
+
   return (
-    <Panel title="Xuất danh sách" extra="Excel, CSV, BibTeX hoặc RIS, đầy đủ mọi dòng" aria-label="Xuất dữ liệu">
+    <Panel title="Xuất danh sách" extra="Excel, CSV, BibTeX hoặc RIS" aria-label="Xuất dữ liệu">
       {contextHolder}
       <Space orientation="vertical" size="small" style={{ width: '100%' }}>
         <Space size="large" wrap align="center">
@@ -65,23 +85,18 @@ export function ExportPanel({ allRecords, filtered, selectedIds, online }: Props
           </Checkbox>
         </Space>
         <Space wrap>
-          <Button type="primary" icon={<FileExcelOutlined />} loading={busy === 'xlsx'} disabled={toExport.length === 0 || busy !== null || !online} onClick={() => void run('xlsx')}>
+          <Button type="primary" icon={<FileExcelOutlined />} loading={busy === 'xlsx'} disabled={disabled} onClick={() => void run('xlsx')}>
             Xuất Excel (.xlsx)
+            {needLogin && !user && lockTag('Đăng nhập')}
           </Button>
-          <Button icon={<FileTextOutlined />} loading={busy === 'csv'} disabled={toExport.length === 0 || busy !== null || !online} onClick={() => void run('csv')}>
+          <Button icon={<FileTextOutlined />} loading={busy === 'csv'} disabled={disabled} onClick={() => void run('csv')}>
             Xuất CSV
+            {needLogin && !user && lockTag('Đăng nhập')}
           </Button>
           {(['bibtex', 'ris'] as const).map((format) => (
-            <Button
-              key={format}
-              icon={<FileTextOutlined />}
-              loading={busy === format}
-              disabled={toExport.length === 0 || busy !== null || !online}
-              onClick={() => void run(format)}
-              title={proLocked ? 'Tính năng gói Pro' : undefined}
-            >
+            <Button key={format} icon={<FileTextOutlined />} loading={busy === format} disabled={disabled} onClick={() => void run(format)} title={referenceLocked ? 'Tính năng hạng Pro' : undefined}>
               {format === 'bibtex' ? 'BibTeX' : 'RIS'}
-              {proLocked && (
+              {referenceLocked && (
                 <Tag color="gold" icon={<CrownFilled />} style={{ marginInlineStart: 6, marginInlineEnd: 0 }}>
                   Pro
                 </Tag>
@@ -89,9 +104,22 @@ export function ExportPanel({ allRecords, filtered, selectedIds, online }: Props
             </Button>
           ))}
           <Typography.Text type="secondary">
-            Sẽ xuất <b>{toExport.length}</b> bài (toàn bộ, không chỉ trang đang xem).
+            Sẽ xuất <b>{willCut ? rowCap : toExport.length}</b> bài{willCut ? ` (hạng ${entitlements.label} giới hạn ${rowCap} dòng/file)` : ' (toàn bộ, không chỉ trang đang xem)'}.
           </Typography.Text>
         </Space>
+        {willCut && (
+          <Alert
+            type="warning"
+            showIcon
+            title={`Bạn đang chọn ${toExport.length} bài nhưng hạng ${entitlements.label} chỉ xuất ${rowCap} dòng đầu mỗi file.`}
+            action={
+              <Button size="small" type="primary" onClick={() => account.openUpgrade('Hạng Tiêu chuẩn trở lên xuất không giới hạn số dòng.', 'standard')}>
+                Mua gói
+              </Button>
+            }
+          />
+        )}
+        {needLogin && !user && <Alert type="info" showIcon title="Đăng nhập (miễn phí) để xuất file Excel/CSV." action={<Button size="small" type="primary" onClick={() => account.openAuth('register')}>Đăng nhập</Button>} />}
         {!onlyDoi && withoutDoiCount > 0 && toExport.length > 0 && (
           <Typography.Text type="secondary">Trong đó có {withoutDoiCount} bài chưa có DOI; tick “Chỉ xuất bài có DOI” để loại các bài này.</Typography.Text>
         )}

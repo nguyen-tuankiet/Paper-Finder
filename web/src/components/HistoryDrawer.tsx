@@ -21,7 +21,7 @@ interface Props {
   onRerun: (request: SearchRequest) => void;
 }
 
-/** Lịch sử tìm kiếm (Pro): lưu điều kiện tìm (không lưu kết quả), chạy lại bằng một lần bấm. */
+/** Lịch sử tìm kiếm (Tiêu chuẩn trở lên): lưu điều kiện tìm (không lưu kết quả), chạy lại bằng một lần bấm. */
 export function HistoryDrawer({ open, onClose, onRerun }: Props) {
   const account = useAccount();
   const [items, setItems] = useState<HistoryEntry[]>([]);
@@ -41,8 +41,8 @@ export function HistoryDrawer({ open, onClose, onRerun }: Props) {
   }, []);
 
   useEffect(() => {
-    if (open && account.isPro) void load();
-  }, [open, account.isPro, load]);
+    if (open && account.entitlements.historyMax > 0 && account.user) void load();
+  }, [open, account.entitlements.historyMax, account.user, load]);
 
   const clear = async () => {
     try {
@@ -57,13 +57,13 @@ export function HistoryDrawer({ open, onClose, onRerun }: Props) {
     <Drawer open={open} onClose={onClose} size={560} title="Lịch sử tìm kiếm" destroyOnHidden>
       {!account.user ? (
         <Alert type="info" showIcon title="Đăng nhập để xem lịch sử" action={<Button size="small" onClick={() => account.openAuth('login')}>Đăng nhập</Button>} />
-      ) : !account.isPro ? (
+      ) : account.entitlements.historyMax === 0 ? (
         <Alert
           type="info"
           showIcon
-          title="Lịch sử tìm kiếm là tính năng của gói Pro"
-          description="Pro lưu lại 50 lần tìm gần nhất để bạn chạy lại nhanh. Chỉ lưu điều kiện tìm, không lưu kết quả."
-          action={<Button size="small" type="primary" onClick={() => account.openUpgrade('Lịch sử tìm kiếm dành cho gói Pro.')}>Nâng cấp</Button>}
+          title="Lịch sử tìm kiếm dành cho hạng Tiêu chuẩn trở lên"
+          description="Lưu lại các lần tìm gần nhất (20 với Tiêu chuẩn, 50 với Pro) để bạn chạy lại nhanh. Chỉ lưu điều kiện tìm, không lưu kết quả."
+          action={<Button size="small" type="primary" onClick={() => account.openUpgrade('Lịch sử tìm kiếm dành cho hạng Tiêu chuẩn trở lên.', 'standard')}>Mua gói</Button>}
         />
       ) : (
         <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
