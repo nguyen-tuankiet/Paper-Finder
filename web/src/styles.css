@@ -1261,19 +1261,53 @@ body {
 }
 
 /* ---------- Chuyển chế độ: tìm theo từ khóa / dán danh sách DOI ---------- */
-.pf-mode.ant-segmented {
-  align-self: flex-start;
-  max-width: 100%;
-  background: #fff;
-  box-shadow: var(--pf-shadow);
+.pf-mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
-.pf-mode-label {
+
+.pf-mode-tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 2px 6px;
-  font-size: 14px;
+  gap: 8px;
+  padding: 10px 18px;
+  border: 1.5px solid #c9d4e2;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--pf-primary);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--pf-shadow);
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
+}
+.pf-mode-tab:hover {
+  border-color: var(--pf-primary);
+  background: #f3f8fd;
+  transform: translateY(-1px);
+}
+.pf-mode-tab:focus-visible {
+  outline: 3px solid rgba(31, 78, 121, 0.35);
+  outline-offset: 2px;
+}
+.pf-mode-tab.is-active {
+  border-color: var(--pf-primary);
+  background: var(--pf-primary);
+  color: #fff;
+  cursor: default;
+  transform: none;
+}
+.pf-mode-icon {
+  display: inline-flex;
+  font-size: 16px;
+}
+.pf-mode-text {
   white-space: nowrap;
+}
+.pf-mode-short {
+  display: none;
 }
 .pf-mode-tag.ant-tag {
   margin: 0;
@@ -1285,13 +1319,24 @@ body {
 }
 
 @media (max-width: 640px) {
-  .pf-mode.ant-segmented {
-    width: 100%;
+  .pf-mode {
+    flex-wrap: nowrap;
+    gap: 8px;
   }
-  .pf-mode-label {
-    padding: 2px 0;
-    gap: 4px;
+  .pf-mode-tab {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+    gap: 5px;
+    padding: 9px 6px;
     font-size: 13px;
+  }
+  /* Màn hình hẹp: dùng nhãn ngắn để cả hai tab đều đọc đủ */
+  .pf-mode-long {
+    display: none;
+  }
+  .pf-mode-short {
+    display: inline;
   }
   /* Màn hình hẹp: chỉ giữ biểu tượng khóa, bỏ chữ để không bị cắt */
   .pf-mode-tag-text {
