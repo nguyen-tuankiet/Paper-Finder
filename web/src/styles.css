@@ -1008,3 +1008,174 @@ body {
     padding: 0 14px;
   }
 }
+
+/* ---------- Tài khoản, hạn mức, gói Pro ---------- */
+.pf-header-account {
+  display: flex;
+  align-items: center;
+}
+
+.pf-account-btn.ant-btn {
+  max-width: 260px;
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+.pf-account-btn.ant-btn:hover,
+.pf-account-btn.ant-btn:focus-visible {
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+.pf-account-email {
+  display: inline-block;
+  max-width: 150px;
+  margin-inline-end: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.pf-account-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 240px;
+  line-height: 1.35;
+}
+.pf-account-info strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--pf-text);
+}
+.pf-account-info span {
+  color: #5b6877;
+  font-size: 12.5px;
+}
+
+.pf-quota {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 8px 14px;
+  border: 1px solid var(--pf-border);
+  border-radius: 10px;
+  background: #fff;
+  color: #44536a;
+  font-size: 13.5px;
+  box-shadow: var(--pf-shadow);
+}
+.pf-quota .anticon {
+  color: var(--pf-primary);
+}
+.pf-quota-low {
+  border-color: #f0d9a8;
+  background: #fffaf0;
+}
+.pf-quota-low .anticon {
+  color: #b7791f;
+}
+.pf-quota-pro {
+  border-color: #ecd9a0;
+  background: #fffbea;
+}
+.pf-quota-pro .anticon {
+  color: #d4a017;
+}
+.pf-quota-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.pf-quota-actions .ant-btn {
+  height: auto;
+  padding: 0 6px;
+}
+
+.pf-pro-benefits {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+.pf-pro-benefits .anticon {
+  margin-right: 6px;
+  color: #2f8f4e;
+}
+
+.pf-plan-group.ant-radio-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+}
+.pf-plan.ant-radio-button-wrapper {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  height: auto;
+  padding: 12px 14px;
+  line-height: 1.3;
+  border-radius: 10px;
+  border-inline-start-width: 1px;
+}
+.pf-plan.ant-radio-button-wrapper::before {
+  display: none;
+}
+.pf-plan-name {
+  display: block;
+  min-height: 22px;
+  font-size: 13.5px;
+}
+.pf-plan-price {
+  display: block;
+  font-size: 20px;
+  font-weight: 650;
+}
+
+@media (max-width: 640px) {
+  /* Điện thoại: logo + nút tài khoản cùng một hàng, dải trạng thái nguồn xuống hàng dưới */
+  .pf-brand {
+    order: 1;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .pf-header-account {
+    order: 2;
+    margin-left: auto;
+  }
+  .pf-header-row > .pf-status {
+    order: 3;
+  }
+  .pf-account-btn.ant-btn {
+    max-width: 150px;
+  }
+  /* Chỉ hiện biểu tượng người dùng (và nhãn Pro) để nằm cùng hàng với logo */
+  .pf-account-email {
+    display: none;
+  }
+  .pf-plan-group.ant-radio-group {
+    grid-template-columns: 1fr;
+  }
+  .pf-quota-actions {
+    margin-left: 0;
+  }
+}
+
+/* Danh sách trong ngăn thư viện / lịch sử */
+.pf-rows {
+  display: flex;
+  flex-direction: column;
+}
+.pf-row {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--pf-border);
+}
+.pf-row:first-child {
+  padding-top: 0;
+}

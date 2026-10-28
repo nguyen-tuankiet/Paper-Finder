@@ -88,7 +88,7 @@ function CustomEditor({ custom, onCustomChange }: Pick<Props, 'custom' | 'onCust
           style={{ fontFamily: 'Consolas, Menlo, monospace', fontSize: 13 }}
           aria-label="Mẫu trích dẫn tự soạn"
         />
-        {unknown.length > 0 && <Alert type="warning" showIcon style={{ marginTop: 6 }} message={`Không nhận ra: ${unknown.map((k) => `{${k}}`).join(', ')}. Hãy chọn trường trong danh sách bên dưới.`} />}
+        {unknown.length > 0 && <Alert type="warning" showIcon style={{ marginTop: 6 }} title={`Không nhận ra: ${unknown.map((k) => `{${k}}`).join(', ')}. Hãy chọn trường trong danh sách bên dưới.`} />}
       </div>
 
       <div className="pf-cite-field">

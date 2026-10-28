@@ -10,6 +10,7 @@ import type { CustomCitationConfig } from '../lib/customCitation';
 import { CitationPanel } from './CitationPanel';
 import { Panel } from './Panel';
 import { PdfButton } from './PdfButton';
+import { SaveToLibraryButton } from './SaveToLibraryButton';
 import {
   NO_DATA,
   SOURCE_LABELS,
@@ -234,6 +235,7 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
               Trích dẫn
             </Button>
           </Tooltip>
+          <SaveToLibraryButton record={record} />
         </Space>
       ),
     },

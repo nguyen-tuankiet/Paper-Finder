@@ -135,7 +135,7 @@ export function pdfFileName(record: Pick<PaperRecord, 'title' | 'doi'>): string 
 }
 
 export function exportFileName(format: ExportFormat, date: Date = new Date()): string {
-  return `paperfinder_results_${localDateStamp(date)}.${format}`;
+  return `paperfinder_results_${localDateStamp(date)}.${format === 'bibtex' ? 'bib' : format}`;
 }
 
 /** Chỉ gửi các trường cần thiết cho việc xuất file để giảm dung lượng request. */
@@ -143,7 +143,11 @@ export function toExportPayload(records: PaperRecord[]) {
   return records.map((r) => ({
     title: r.title,
     doi: r.doi,
-    authors: r.authors.map((a) => ({ name: a.name })),
+    authors: r.authors.map((a) => ({ name: a.name, ...(a.given ? { given: a.given } : {}), ...(a.family ? { family: a.family } : {}) })),
+    volume: r.volume,
+    issue: r.issue,
+    pages: r.pages,
+    place: r.place,
     publicationYear: r.publicationYear,
     journal: r.journal,
     publisher: r.publisher,

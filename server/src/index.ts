@@ -1,3 +1,4 @@
+import { buildAccounts } from './accounts/context.js';
 import { createApp } from './app.js';
 import { loadEnvFiles, parseConfig } from './config.js';
 import { HttpClient } from './lib/http.js';
@@ -45,11 +46,13 @@ if (config.semanticScholarApiKey) {
 }
 
 const stats = new StatsService({ filePath: config.statsFile, timezone: config.statsTimezone, retentionDays: config.statsRetentionDays, logger });
+const accounts = await buildAccounts(config, logger);
 const app = createApp({
   adapters,
   config,
   logger,
   stats,
+  accounts,
   signer: new UrlSigner(config.downloadSecret),
   downloadOptions: { maxBytes: config.downloadMaxBytes },
 });
@@ -60,6 +63,8 @@ const server = app.listen(config.port, () => {
     openAlexKey: Boolean(config.openAlexApiKey),
     sources: Object.keys(adapters),
     adminEnabled: Boolean(config.adminPassword),
+    accounts: accounts ? accounts.store.kind : 'off',
+    billing: Boolean(accounts && config.payos),
     serveStatic: Boolean(config.staticDir),
   });
 });
@@ -68,6 +73,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     logger.info('server_stopping', { signal });
     stats.stop(); // ghi nốt thống kê ra file
+    void accounts?.store.close(); // ghi nốt tài khoản / đóng kết nối cơ sở dữ liệu
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 3000).unref();
   });

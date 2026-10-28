@@ -4,6 +4,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import AdminPage from './AdminPage';
+import { AccountProvider } from './lib/account';
 import './styles.css';
 
 // Chỉ có hai trang nên không cần thư viện router: /admin là trang quản trị, còn lại là trang tìm kiếm.
@@ -27,7 +28,13 @@ createRoot(document.getElementById('root')!).render(
         },
       }}
     >
-      {isAdmin ? <AdminPage /> : <App />}
+      {isAdmin ? (
+        <AdminPage />
+      ) : (
+        <AccountProvider>
+          <App />
+        </AccountProvider>
+      )}
     </ConfigProvider>
   </StrictMode>,
 );

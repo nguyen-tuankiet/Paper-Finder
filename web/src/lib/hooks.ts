@@ -62,6 +62,8 @@ export interface SearchState {
   progress: Partial<Record<SourceId, SourceProgress>>;
   result: SearchResult | null;
   error: string | null;
+  /** Mã lỗi của máy chủ (vd. quota_exceeded) khi có. */
+  errorCode: string | null;
   start: (request: SearchRequest) => void;
   cancel: () => void;
 }
@@ -71,6 +73,7 @@ export function useSearch(): SearchState {
   const [progress, setProgress] = useState<SearchState['progress']>({});
   const [result, setResult] = useState<SearchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
 
   const start = useCallback((request: SearchRequest) => {
@@ -81,6 +84,7 @@ export function useSearch(): SearchState {
     setProgress({});
     setResult(null);
     setError(null);
+    setErrorCode(null);
 
     streamSearch(request, controller.signal, (event) => {
       if (controller.signal.aborted) return;
@@ -99,6 +103,7 @@ export function useSearch(): SearchState {
         return;
       }
       setError(err instanceof Error ? err.message : 'Đã xảy ra lỗi không xác định.');
+      setErrorCode(err instanceof ApiError ? (err.code ?? null) : null);
       setPhase('failed');
     });
   }, []);
@@ -109,5 +114,5 @@ export function useSearch(): SearchState {
 
   useEffect(() => () => controllerRef.current?.abort(), []);
 
-  return { phase, progress, result, error, start, cancel };
+  return { phase, progress, result, error, errorCode, start, cancel };
 }

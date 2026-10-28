@@ -136,14 +136,14 @@ function Dashboard({ password, onLogout }: { password: string; onLogout: () => v
         </Space>
       </div>
 
-      {error && <Alert type="error" showIcon message={error} />}
+      {error && <Alert type="error" showIcon title={error} />}
 
       {report && (
         <>
           <Alert
             type={report.persistent ? 'info' : 'warning'}
             showIcon
-            message={
+            title={
               report.persistent
                 ? 'Thống kê được ghi vào file trên máy chủ. Nếu máy chủ dùng ổ đĩa tạm (ví dụ Render gói Free), số liệu sẽ mất khi khởi động lại hoặc deploy lại.'
                 : 'Thống kê chỉ lưu trong bộ nhớ và sẽ mất khi máy chủ khởi động lại.'

@@ -1,6 +1,7 @@
 import { LoadingOutlined } from '@ant-design/icons';
 import { Alert, Button, Empty, Progress, Space, Typography } from 'antd';
 import type { SearchResult, SourceId } from '../../../shared/types';
+import { useAccount } from '../lib/accountContext';
 import type { SearchPhase, SourceProgress } from '../lib/hooks';
 import { SOURCE_LABELS } from '../lib/records';
 import { Panel } from './Panel';
@@ -54,7 +55,7 @@ export function SourceAlerts({ result }: { result: SearchResult }) {
             key={source.source}
             type={source.state === 'error' ? 'error' : 'warning'}
             showIcon
-            message={
+            title={
               source.state === 'error'
                 ? `${source.label}: không lấy được dữ liệu${allFailed ? '' : ' — kết quả bên dưới chỉ đến từ các nguồn còn lại'}`
                 : `${source.label}: chỉ lấy được một phần dữ liệu`
@@ -76,20 +77,52 @@ export function SourceAlerts({ result }: { result: SearchResult }) {
   );
 }
 
-export function EmptyState({ phase, error, hasResult, onRetry }: { phase: SearchPhase; error: string | null; hasResult: boolean; onRetry?: () => void }) {
+export function EmptyState({
+  phase,
+  error,
+  errorCode,
+  hasResult,
+  onRetry,
+}: {
+  phase: SearchPhase;
+  error: string | null;
+  errorCode?: string | null;
+  hasResult: boolean;
+  onRetry?: () => void;
+}) {
+  const account = useAccount();
+  if (phase === 'failed' && errorCode === 'quota_exceeded') {
+    // Hết lượt tìm trong ngày: dẫn người dùng tới đăng nhập hoặc nâng cấp thay vì báo lỗi chung.
+    return (
+      <Alert
+        type="warning"
+        showIcon
+        title="Đã hết lượt tìm miễn phí hôm nay"
+        description={error}
+        action={
+          <Space>
+            {!account.user && <Button onClick={() => account.openAuth('register')}>Đăng nhập</Button>}
+            <Button type="primary" onClick={() => account.openUpgrade('Gói Pro không giới hạn lượt tìm mỗi ngày.')}>
+              Nâng cấp Pro
+            </Button>
+          </Space>
+        }
+      />
+    );
+  }
   if (phase === 'failed') {
     return (
       <Alert
         type="error"
         showIcon
-        message="Không thực hiện được tìm kiếm"
+        title="Không thực hiện được tìm kiếm"
         description={error ?? 'Đã xảy ra lỗi không xác định.'}
         action={onRetry ? <Button onClick={onRetry}>Thử lại</Button> : undefined}
       />
     );
   }
   if (phase === 'cancelled') {
-    return <Alert type="info" showIcon message="Đã hủy tìm kiếm." description="Bạn có thể chỉnh từ khóa hoặc bộ lọc rồi tìm lại." />;
+    return <Alert type="info" showIcon title="Đã hủy tìm kiếm." description="Bạn có thể chỉnh từ khóa hoặc bộ lọc rồi tìm lại." />;
   }
   if (phase === 'idle' && !hasResult) {
     return (

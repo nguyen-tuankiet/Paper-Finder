@@ -5,12 +5,14 @@ interface Props {
   subtitle: string;
   /** Phần bên phải thanh đầu trang (trạng thái nguồn, liên kết...). */
   right?: ReactNode;
+  /** Nút đăng nhập / menu tài khoản ở góc phải. */
+  account?: ReactNode;
   /** Khối giới thiệu lớn dưới thanh đầu trang (chỉ trang chính). */
   hero?: ReactNode;
 }
 
 /** Thanh đầu trang dùng chung cho trang tìm kiếm và trang quản trị. */
-export function PageHeader({ subtitle, right, hero }: Props) {
+export function PageHeader({ subtitle, right, account, hero }: Props) {
   return (
     <header className={hero ? 'pf-header pf-header-hero' : 'pf-header'}>
       <div className="pf-header-inner pf-header-row">
@@ -24,6 +26,7 @@ export function PageHeader({ subtitle, right, hero }: Props) {
           </span>
         </a>
         {right}
+        {account && <div className="pf-header-account">{account}</div>}
       </div>
       {hero && <div className="pf-header-inner pf-hero">{hero}</div>}
     </header>

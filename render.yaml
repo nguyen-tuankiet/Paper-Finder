@@ -25,3 +25,16 @@ services:
       # Mật khẩu trang /admin (thống kê sử dụng). Không điền = trang admin bị tắt.
       - key: ADMIN_PASSWORD
         sync: false
+      # --- Tài khoản và gói Pro (tùy chọn; xem DEPLOY.md mục 7). Không điền SESSION_SECRET = tắt tài khoản. ---
+      - key: SESSION_SECRET
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: PAYOS_CLIENT_ID
+        sync: false
+      - key: PAYOS_API_KEY
+        sync: false
+      - key: PAYOS_CHECKSUM_KEY
+        sync: false

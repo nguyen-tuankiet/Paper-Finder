@@ -18,7 +18,7 @@ export function DetailDrawer({ record, citationStyle, customCitation, onClose }:
   };
 
   return (
-    <Drawer open={record !== null} onClose={onClose} width={680} title="Chi tiết metadata" destroyOnClose>
+    <Drawer open={record !== null} onClose={onClose} size={680} title="Chi tiết metadata" destroyOnHidden>
       {contextHolder}
       {record && (
         <Space orientation="vertical" size="middle" style={{ width: '100%' }}>

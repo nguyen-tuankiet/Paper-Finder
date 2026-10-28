@@ -1,7 +1,12 @@
 import { Alert, FloatButton, Layout, Typography } from 'antd';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { PaperRecord, SearchRequest, SearchResult } from '../../shared/types';
+import { AccountMenu } from './components/AccountMenu';
 import { AppFooter } from './components/AppFooter';
+import { HistoryDrawer } from './components/HistoryDrawer';
+import { LibraryDrawer } from './components/LibraryDrawer';
+import { QuotaBar } from './components/QuotaBar';
+import { useAccount } from './lib/accountContext';
 import { DetailDrawer } from './components/DetailDrawer';
 import { ProductPopup } from './components/ProductPopup';
 import { DuplicatesModal, type DuplicateAction } from './components/DuplicatesModal';
@@ -90,7 +95,10 @@ export default function App() {
   const online = useOnlineStatus();
   const health = useSourceHealth(online);
   const search = useSearch();
+  const account = useAccount();
   const [lastRequest, setLastRequest] = useState<SearchRequest | null>(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const available = health.status === 'ready' ? health.sources.map((s) => s.source) : DEFAULT_SOURCES;
 
   const run = (request: SearchRequest) => {
@@ -100,17 +108,26 @@ export default function App() {
 
   const searching = search.phase === 'searching';
 
+  // Mỗi lần tìm xong (hoặc bị từ chối/hủy) cập nhật số lượt còn lại.
+  const { refresh } = account;
+  useEffect(() => {
+    if (search.phase === 'done' || search.phase === 'failed' || search.phase === 'cancelled') void refresh();
+  }, [search.phase, refresh]);
+
   return (
     <Layout className="pf-layout">
-      <Header health={health} online={online} />
+      <Header health={health} online={online} account={<AccountMenu onOpenLibrary={() => setLibraryOpen(true)} onOpenHistory={() => setHistoryOpen(true)} />} />
       <Layout.Content className="pf-main pf-main-overlap">
-        {!online && <Alert type="warning" showIcon message="Bạn đang offline" description="Không thể tìm kiếm hoặc xuất file cho tới khi có mạng trở lại. Kết quả đã tải vẫn xem được." />}
+        {!online && <Alert type="warning" showIcon title="Bạn đang offline" description="Không thể tìm kiếm hoặc xuất file cho tới khi có mạng trở lại. Kết quả đã tải vẫn xem được." />}
+        <QuotaBar />
         <SearchForm searching={searching} disabled={!online} available={available} onSearch={run} onCancel={search.cancel} />
         {searching && lastRequest && <SearchProgress sources={lastRequest.sources} progress={search.progress} />}
-        <EmptyState phase={search.phase} error={search.error} hasResult={search.result !== null} onRetry={lastRequest ? () => run(lastRequest) : undefined} />
+        <EmptyState phase={search.phase} error={search.error} errorCode={search.errorCode} hasResult={search.result !== null} onRetry={lastRequest && search.errorCode !== 'quota_exceeded' ? () => run(lastRequest) : undefined} />
         {search.result && search.phase === 'done' && <ResultsView key={search.result.finishedAt} result={search.result} online={online} />}
       </Layout.Content>
       <AppFooter />
+      <LibraryDrawer open={libraryOpen} onClose={() => setLibraryOpen(false)} />
+      <HistoryDrawer open={historyOpen} onClose={() => setHistoryOpen(false)} onRerun={run} />
       <ProductPopup />
       <FloatButton.BackTop className="pf-backtop" visibilityHeight={600} tooltip="Lên đầu trang" />
     </Layout>

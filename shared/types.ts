@@ -131,7 +131,78 @@ export interface SourceHealth {
   checkedAt: string;
 }
 
-export type ExportFormat = 'xlsx' | 'csv';
+export type ExportFormat = 'xlsx' | 'csv' | 'bibtex' | 'ris';
+
+/** Định dạng chỉ dành cho gói Pro (nhập vào Zotero, Mendeley, EndNote). */
+export const PRO_EXPORT_FORMATS: readonly ExportFormat[] = ['bibtex', 'ris'];
+
+// ---------- Tài khoản, gói và thanh toán ----------
+
+export type PlanId = 'month' | 'year';
+
+export interface PlanOption {
+  id: PlanId;
+  label: string;
+  days: number;
+  priceVnd: number;
+}
+
+export interface PlansResponse {
+  /** Máy chủ có bật tài khoản hay không (cần SESSION_SECRET). Tắt = không giới hạn lượt tìm như trước. */
+  accountsEnabled: boolean;
+  /** Đã cấu hình cổng thanh toán PayOS hay chưa. */
+  billingEnabled: boolean;
+  freeDailySearches: number;
+  guestDailySearches: number;
+  plans: PlanOption[];
+}
+
+export interface QuotaInfo {
+  /** null = không giới hạn (gói Pro hoặc tính năng tài khoản đang tắt). */
+  limit: number | null;
+  used: number;
+  remaining: number | null;
+  /** Thời điểm đặt lại lượt tìm (đầu ngày kế tiếp theo múi giờ máy chủ). */
+  resetsAt: string | null;
+}
+
+export interface AccountUser {
+  email: string;
+  isPro: boolean;
+  proUntil: string | null;
+  createdAt: string;
+}
+
+export interface MeResponse {
+  accountsEnabled: boolean;
+  user: AccountUser | null;
+  quota: QuotaInfo;
+}
+
+export interface HistoryEntry {
+  id: string;
+  at: string;
+  request: SearchRequest;
+  total: number;
+}
+
+export interface LibraryItem {
+  /** Khóa duy nhất của bài trong thư viện (DOI, hoặc mã băm tiêu đề khi không có DOI). */
+  key: string;
+  folder: string;
+  savedAt: string;
+  record: PaperRecord;
+}
+
+export interface CheckoutResponse {
+  checkoutUrl: string;
+  orderCode: number;
+}
+
+export interface PaymentStatusResponse {
+  status: 'paid' | 'pending' | 'cancelled' | 'unknown';
+  user: AccountUser | null;
+}
 
 // ---------- Thống kê sử dụng (trang admin) ----------
 

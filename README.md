@@ -75,10 +75,15 @@ npm start                   # backend phục vụ luôn web/dist tại http://lo
 | Method | Đường dẫn | Mô tả |
 | --- | --- | --- |
 | POST | `/api/search` | Tìm kiếm. Trả về NDJSON: các dòng `progress`, rồi một dòng `result`. Đóng kết nối = hủy tác vụ. |
-| POST | `/api/export` | `{format: "xlsx"\|"csv", records: [...]}` → file tải về |
+| POST | `/api/export` | `{format: "xlsx"\|"csv"\|"bibtex"\|"ris", records: [...]}` → file tải về (BibTeX/RIS cần gói Pro khi bật tài khoản) |
 | GET | `/api/sources` | Danh sách nguồn đang bật và trạng thái kết nối của từng nguồn (cache 60 giây) |
 | GET | `/api/health` | Kiểm tra backend (nhẹ, không gọi nguồn dữ liệu; dùng cho bot giám sát) |
 | GET | `/api/admin/stats?days=30` | Thống kê sử dụng; cần header `Authorization: Bearer <ADMIN_PASSWORD>` |
+| GET | `/api/me`, `/api/plans` | Trạng thái đăng nhập, hạn mức lượt tìm; giá và các gói |
+| POST | `/api/auth/register`, `/login`, `/logout`, `/change-password` | Tài khoản email + mật khẩu (chỉ khi bật `SESSION_SECRET`) |
+| POST | `/api/billing/checkout`, `/confirm`, `/payos-webhook` | Tạo link thanh toán PayOS, kiểm tra và kích hoạt Pro |
+| GET/POST/DELETE | `/api/library`, `/api/history` | Thư viện cá nhân và lịch sử tìm kiếm (gói Pro) |
+| POST | `/api/admin/grant`, GET `/api/admin/accounts` | Cấp Pro thủ công và thống kê tài khoản (cần mật khẩu admin) |
 
 Ví dụ yêu cầu tìm kiếm:
 
@@ -135,6 +140,10 @@ Nút **Trích dẫn** (mỗi bài) và dòng **Tài liệu tham khảo** phía t
 Hỗ trợ các loại: bài tạp chí, hội nghị, sách, chương sách, luận văn, báo cáo (mỗi kiểu có mẫu riêng cho từng loại, đã được đối chiếu bằng test với các mẫu IEEE/APA 7 của dự án). Ngăn Chi tiết của APA còn có **trích dẫn trong văn bản** (Nguyen & Tran, 2025). Với IEEE, trong văn bản dùng số thứ tự [n] theo danh sách.
 
 **Không hỗ trợ:** website (ứng dụng chỉ tìm tài liệu học thuật). **Phần nào nguồn không có thì bị bỏ qua, không bịa:** biên tập viên của chương sách, lần xuất bản của sách, số báo cáo, bậc học và nơi của luận văn đều không có trong dữ liệu nên không xuất hiện (luận văn ghi chung là "thesis"). Tên tạp chí/sách không in nghiêng được ở dạng văn bản thuần; tiêu đề giữ nguyên chữ hoa/thường của nguồn (APA yêu cầu viết hoa kiểu câu, chưa tự chuyển đổi). Tên tác giả theo thứ tự họ phổ biến cho tên Việt Nam khi nguồn không tách họ/tên nên có thể sai ở vài trường hợp. Hãy đối chiếu với bài gốc trước khi dùng.
+
+## Tài khoản và gói Pro (tùy chọn)
+
+Đặt `SESSION_SECRET` để bật đăng nhập bằng email + mật khẩu (băm bằng scrypt, phiên là cookie HttpOnly), giới hạn lượt tìm theo ngày (khách theo IP, thành viên theo tài khoản) và gói **Pro**: không giới hạn lượt tìm, thư viện cá nhân (lưu bài, chia thư mục), lịch sử tìm kiếm và xuất BibTeX/RIS. Không đặt `SESSION_SECRET` thì mọi thứ chạy như trước (không đăng nhập, không giới hạn). Dữ liệu tài khoản lưu ở PostgreSQL (`DATABASE_URL`) hoặc file JSON khi chạy local; thanh toán qua PayOS, kích hoạt Pro tự động và đúng một lần cho mỗi đơn. Cấu hình, webhook và cấp Pro thủ công: xem `DEPLOY.md` mục 7 và `.env.example`.
 
 ## Trang quản trị (thống kê sử dụng)
 

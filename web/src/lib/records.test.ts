@@ -114,4 +114,14 @@ describe('tiện ích', () => {
     expect(Object.keys(item!)).not.toContain('sourceRefs');
     expect(item!.authors).toEqual([{ name: 'Nguyễn Văn An' }]);
   });
+  it('exportFileName dùng đuôi .bib cho BibTeX và .ris cho RIS', () => {
+    expect(exportFileName('bibtex', new Date(2026, 9, 5))).toBe('paperfinder_results_2026-10-05.bib');
+    expect(exportFileName('ris', new Date(2026, 9, 5))).toBe('paperfinder_results_2026-10-05.ris');
+  });
+  it('toExportPayload gửi họ tên tách và thông tin tập/số/trang cho BibTeX/RIS', () => {
+    const record = { ...data[2]!, authors: [{ name: 'Jane Smith', given: 'Jane', family: 'Smith' }, { name: 'Plato' }], volume: '12', issue: '3', pages: '1-9' };
+    const [item] = toExportPayload([record]);
+    expect(item!.authors).toEqual([{ name: 'Jane Smith', given: 'Jane', family: 'Smith' }, { name: 'Plato' }]);
+    expect(item).toMatchObject({ volume: '12', issue: '3', pages: '1-9' });
+  });
 });

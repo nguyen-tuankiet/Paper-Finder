@@ -32,6 +32,10 @@ const GUIDE_STEPS: { title: string; body: ReactNode }[] = [
     body: 'Trong khung “Xuất danh sách”, chọn xuất kết quả đang lọc, bài đã chọn hoặc tất cả (có thể chỉ lấy bài có DOI) rồi bấm “Xuất Excel” hoặc “Xuất CSV”. File gồm đầy đủ mọi dòng, không chỉ trang đang xem.',
   },
   {
+    title: 'Tài khoản và gói Pro (nếu trang bật tính năng này)',
+    body: 'Khách và thành viên miễn phí có số lượt tìm giới hạn mỗi ngày (mỗi từ khóa tính một lượt; dải thông tin phía trên ô tìm kiếm cho biết còn bao nhiêu). Đăng nhập để có thêm lượt. Gói Pro không giới hạn lượt tìm và có thêm thư viện cá nhân (nút “Lưu” ở mỗi bài), lịch sử tìm kiếm, xuất BibTeX/RIS cho Zotero, Mendeley, EndNote.',
+  },
+  {
     title: 'Xử lý bài nghi trùng',
     body: 'Các bài cùng tiêu đề nhưng chưa đủ bằng chứng để tự gộp sẽ nằm ở mục “Nghi trùng cần xem”. Bấm “Xử lý” ngay trên ô đó để giữ cả hai hoặc loại bỏ một bản khỏi danh sách và file xuất.',
   },
@@ -61,6 +65,10 @@ const FAQ: { q: string; a: ReactNode }[] = [
   {
     q: 'Tài liệu tham khảo sao chép ra có chính xác tuyệt đối không?',
     a: 'Chúng được dựng từ metadata của nguồn nên có thể thiếu hoặc sai ở vài trường hợp (ví dụ tên tác giả Việt Nam không tách được họ và tên, tiêu đề chưa viết hoa theo kiểu APA). Hãy đối chiếu với bài gốc trước khi đưa vào báo cáo.',
+  },
+  {
+    q: 'Vì sao tôi bị giới hạn lượt tìm? Mua gói Pro thế nào?',
+    a: 'Để duy trì chi phí máy chủ và tôn trọng giới hạn của các nguồn dữ liệu, khách và thành viên miễn phí có số lượt tìm cố định mỗi ngày, đặt lại vào 0 giờ (giờ Việt Nam). Lần tìm không có nguồn nào trả kết quả hoặc bị hủy sẽ được hoàn lại lượt. Gói Pro (1 tháng hoặc 1 năm) thanh toán bằng chuyển khoản QR qua PayOS, tự kích hoạt sau khi nhận tiền và không tự động gia hạn; mua thêm khi còn hạn thì được cộng dồn. Hết hạn Pro, dữ liệu thư viện và lịch sử vẫn được giữ và xem lại được khi bạn gia hạn.',
   },
   {
     q: 'Có một nguồn báo lỗi hoặc hết hạn mức thì sao?',
@@ -97,6 +105,16 @@ function PrivacyContent() {
       <Typography.Title level={5}>Thống kê sử dụng ẩn danh</Typography.Title>
       <Typography.Paragraph>
         Để biết ứng dụng có người dùng hay không, máy chủ chỉ ghi <b>số đếm theo ngày</b> (số lượt tìm, lượt xuất file, nguồn được dùng) và một <b>mã băm một chiều</b> của địa chỉ IP kết hợp trình duyệt để đếm số người khác nhau. Địa chỉ IP gốc không được lưu và không thể suy ngược từ mã băm.
+      </Typography.Paragraph>
+      <Typography.Title level={5}>Tài khoản và gói Pro (khi trang bật tính năng này)</Typography.Title>
+      <Typography.Paragraph>
+        Nếu bạn tạo tài khoản, PaperFinder lưu <b>email</b>, <b>mật khẩu đã băm một chiều</b> (không lưu mật khẩu gốc), thời hạn gói Pro và số lượt tìm đã dùng trong ngày. Một <b>cookie phiên đăng nhập</b> (HttpOnly) được đặt để giữ bạn đăng nhập; cookie này chỉ dùng để đăng nhập, không dùng để theo dõi. Khách chưa đăng nhập được tính lượt theo mã băm một chiều của địa chỉ IP, giữ tạm trong bộ nhớ.
+      </Typography.Paragraph>
+      <Typography.Paragraph>
+        Với gói Pro, <b>thư viện</b> (các bài bạn bấm “Lưu”) và <b>lịch sử tìm kiếm</b> (điều kiện tìm: từ khóa, nguồn, khoảng năm — không gồm kết quả; giữ 50 lần gần nhất) được lưu gắn với tài khoản để bạn xem lại; bạn xóa được bất cứ lúc nào. Đây là ngoại lệ của câu “không lưu từ khóa thành lịch sử” ở trên, và chỉ áp dụng cho tài khoản Pro.
+      </Typography.Paragraph>
+      <Typography.Paragraph>
+        Thanh toán do <b>PayOS</b> xử lý trên trang của họ; PaperFinder không nhận hay lưu số thẻ/tài khoản ngân hàng của bạn, chỉ lưu mã đơn, số tiền và trạng thái thanh toán để kích hoạt gói.
       </Typography.Paragraph>
       <Typography.Title level={5}>Dữ liệu trên trình duyệt của bạn</Typography.Title>
       <Typography.Paragraph>

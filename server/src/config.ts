@@ -30,6 +30,22 @@ const envSchema = z.object({
   STATS_TIMEZONE: z.string().default('Asia/Ho_Chi_Minh'),
   /** Số ngày giữ thống kê. */
   STATS_RETENTION_DAYS: z.coerce.number().int().min(7).max(3650).default(365),
+  /** Khóa ký phiên đăng nhập. Không đặt = TẮT tài khoản: không đăng nhập, không giới hạn lượt tìm (như trước đây). */
+  SESSION_SECRET: z.string().min(32, 'SESSION_SECRET cần ít nhất 32 ký tự').optional(),
+  /** Chuỗi kết nối PostgreSQL (vd. Neon/Supabase) để lưu tài khoản bền vững. Không đặt = lưu file JSON (mất khi Render Free khởi động lại). */
+  DATABASE_URL: z.string().optional(),
+  /** File JSON lưu tài khoản khi không có DATABASE_URL. */
+  ACCOUNTS_FILE: z.string().optional(),
+  FREE_DAILY_SEARCHES: z.coerce.number().int().min(1).max(1000).default(10),
+  GUEST_DAILY_SEARCHES: z.coerce.number().int().min(0).max(1000).default(3),
+  /** Giá gói Pro (VND). */
+  PRO_PRICE_MONTH: z.coerce.number().int().min(2000).max(100_000_000).default(49_000),
+  PRO_PRICE_YEAR: z.coerce.number().int().min(2000).max(100_000_000).default(399_000),
+  /** Địa chỉ công khai của trang (https://ten-mien.com) để PayOS đưa người dùng quay lại sau thanh toán. */
+  PUBLIC_BASE_URL: z.string().url().optional(),
+  PAYOS_CLIENT_ID: z.string().min(1).optional(),
+  PAYOS_API_KEY: z.string().min(1).optional(),
+  PAYOS_CHECKSUM_KEY: z.string().min(1).optional(),
   STATIC_DIR: z.string().optional(),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error', 'silent']).default('info'),
 });
@@ -51,6 +67,15 @@ export interface AppConfig {
   statsFile: string;
   statsTimezone: string;
   statsRetentionDays: number;
+  sessionSecret?: string;
+  databaseUrl?: string;
+  accountsFile: string;
+  freeDailySearches: number;
+  guestDailySearches: number;
+  proPriceMonth: number;
+  proPriceYear: number;
+  publicBaseUrl?: string;
+  payos?: { clientId: string; apiKey: string; checksumKey: string };
   staticDir?: string;
   logLevel: LogLevel;
 }
@@ -97,6 +122,19 @@ export function parseConfig(env: Record<string, string | undefined>, cwd = proce
     statsFile: parsed.STATS_FILE ? path.resolve(cwd, parsed.STATS_FILE) : path.resolve(cwd, 'data', 'stats.json'),
     statsTimezone: parsed.STATS_TIMEZONE,
     statsRetentionDays: parsed.STATS_RETENTION_DAYS,
+    sessionSecret: parsed.SESSION_SECRET,
+    databaseUrl: parsed.DATABASE_URL,
+    accountsFile: parsed.ACCOUNTS_FILE ? path.resolve(cwd, parsed.ACCOUNTS_FILE) : path.resolve(cwd, 'data', 'accounts.json'),
+    freeDailySearches: parsed.FREE_DAILY_SEARCHES,
+    guestDailySearches: parsed.GUEST_DAILY_SEARCHES,
+    proPriceMonth: parsed.PRO_PRICE_MONTH,
+    proPriceYear: parsed.PRO_PRICE_YEAR,
+    publicBaseUrl: parsed.PUBLIC_BASE_URL?.replace(/\/+$/, ''),
+    // Chỉ bật thanh toán khi đủ cả ba giá trị và biết địa chỉ trang để PayOS trả người dùng về.
+    payos:
+      parsed.PAYOS_CLIENT_ID && parsed.PAYOS_API_KEY && parsed.PAYOS_CHECKSUM_KEY && parsed.PUBLIC_BASE_URL
+        ? { clientId: parsed.PAYOS_CLIENT_ID, apiKey: parsed.PAYOS_API_KEY, checksumKey: parsed.PAYOS_CHECKSUM_KEY }
+        : undefined,
     staticDir,
     logLevel: parsed.LOG_LEVEL,
   };

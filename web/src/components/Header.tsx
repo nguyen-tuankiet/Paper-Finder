@@ -24,7 +24,7 @@ const FEATURES = [
   { icon: <BookOutlined />, text: 'Trích dẫn IEEE · APA 7 · tự soạn' },
 ];
 
-export function Header({ health, online }: { health: SourcesHealthState; online: boolean }) {
+export function Header({ health, online, account }: { health: SourcesHealthState; online: boolean; account?: ReactNode }) {
   const status = (
     <div className="pf-status" aria-label="Trạng thái kết nối nguồn dữ liệu">
       {!online ? (
@@ -66,5 +66,5 @@ export function Header({ health, online }: { health: SourcesHealthState; online:
     </div>
   );
 
-  return <PageHeader subtitle="Tìm kiếm và quản lý tài liệu khoa học" right={status} hero={hero} />;
+  return <PageHeader subtitle="Tìm kiếm và quản lý tài liệu khoa học" right={status} account={account} hero={hero} />;
 }

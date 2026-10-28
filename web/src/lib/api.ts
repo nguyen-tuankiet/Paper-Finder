@@ -1,4 +1,19 @@
-import type { ExportFormat, PaperRecord, SearchEvent, SearchRequest, SourceHealth, UsageReport } from '../../../shared/types';
+import type {
+  AccountUser,
+  CheckoutResponse,
+  ExportFormat,
+  HistoryEntry,
+  LibraryItem,
+  MeResponse,
+  PaperRecord,
+  PaymentStatusResponse,
+  PlanId,
+  PlansResponse,
+  SearchEvent,
+  SearchRequest,
+  SourceHealth,
+  UsageReport,
+} from '../../../shared/types';
 import { pdfFileName, toExportPayload } from './records';
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
@@ -10,20 +25,32 @@ export class ApiError extends Error {
     message: string,
     readonly kind: ApiErrorKind,
     readonly status?: number,
+    /** Mã lỗi của máy chủ (vd. quota_exceeded, pro_required, unauthorized). */
+    readonly code?: string,
   ) {
     super(message);
     this.name = 'ApiError';
   }
 }
 
-async function readHttpError(response: Response): Promise<string> {
+async function readHttpErrorInfo(response: Response): Promise<{ message: string; code?: string }> {
   try {
-    const body = (await response.json()) as { message?: string; issues?: { message: string }[] };
+    const body = (await response.json()) as { error?: string; message?: string; issues?: { message: string }[] };
     const detail = body.issues?.map((i) => i.message).join(' ');
-    return [body.message, detail].filter(Boolean).join(' ') || `Máy chủ trả về lỗi HTTP ${response.status}.`;
+    const message = [body.message, detail].filter(Boolean).join(' ') || `Máy chủ trả về lỗi HTTP ${response.status}.`;
+    return { message, code: body.error };
   } catch {
-    return `Máy chủ trả về lỗi HTTP ${response.status}.`;
+    return { message: `Máy chủ trả về lỗi HTTP ${response.status}.` };
   }
+}
+
+async function readHttpError(response: Response): Promise<string> {
+  return (await readHttpErrorInfo(response)).message;
+}
+
+async function httpError(response: Response): Promise<ApiError> {
+  const { message, code } = await readHttpErrorInfo(response);
+  return new ApiError(message, 'http', response.status, code);
 }
 
 async function request(path: string, init: RequestInit): Promise<Response> {
@@ -43,7 +70,7 @@ export async function streamSearch(body: SearchRequest, signal: AbortSignal, onE
     body: JSON.stringify(body),
     signal,
   });
-  if (!response.ok) throw new ApiError(await readHttpError(response), 'http');
+  if (!response.ok) throw await httpError(response);
   if (!response.body) throw new ApiError('Trình duyệt không hỗ trợ đọc dữ liệu dạng luồng.', 'stream');
 
   const reader = response.body.getReader();
@@ -93,16 +120,44 @@ export async function fetchUsageReport(password: string, days: number, signal?: 
   return (await response.json()) as UsageReport;
 }
 
-/** Yêu cầu backend tạo file rồi tải về bằng tên file `fileName`. */
+/** Yêu cầu backend tạo file rồi tải về bằng tên file `fileName`. Ném ApiError có `code` 'unauthorized' / 'pro_required' với BibTeX/RIS. */
 export async function exportRecords(format: ExportFormat, records: PaperRecord[], fileName: string): Promise<void> {
   const response = await request('/api/export', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ format, records: toExportPayload(records) }),
   });
-  if (!response.ok) throw new ApiError(await readHttpError(response), 'http');
+  if (!response.ok) throw await httpError(response);
   saveBlob(await response.blob(), fileName);
 }
+
+// ---------- Tài khoản, gói Pro, thanh toán ----------
+
+async function json<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await request(path, {
+    ...init,
+    headers: { ...(init.body !== undefined ? { 'content-type': 'application/json' } : {}), ...init.headers },
+  });
+  if (!response.ok) throw await httpError(response);
+  return (await response.json()) as T;
+}
+
+const post = <T>(path: string, body: unknown) => json<T>(path, { method: 'POST', body: JSON.stringify(body) });
+
+export const fetchMe = (signal?: AbortSignal) => json<MeResponse>('/api/me', { signal });
+export const fetchPlans = (signal?: AbortSignal) => json<PlansResponse>('/api/plans', { signal });
+export const registerAccount = (email: string, password: string) => post<{ user: AccountUser }>('/api/auth/register', { email, password });
+export const loginAccount = (email: string, password: string) => post<{ user: AccountUser }>('/api/auth/login', { email, password });
+export const logoutAccount = () => post<{ ok: true }>('/api/auth/logout', {});
+export const changePassword = (currentPassword: string, newPassword: string) => post<{ ok: true }>('/api/auth/change-password', { currentPassword, newPassword });
+export const startCheckout = (plan: PlanId) => post<CheckoutResponse>('/api/billing/checkout', { plan });
+export const confirmPayment = (orderCode: number) => post<PaymentStatusResponse>('/api/billing/confirm', { orderCode });
+
+export const fetchLibrary = () => json<LibraryItem[]>('/api/library');
+export const saveToLibrary = (record: PaperRecord, folder: string) => post<{ status: 'saved' | 'exists'; key: string }>('/api/library', { record, folder });
+export const removeFromLibrary = (key: string) => json<{ ok: true }>(`/api/library/${encodeURIComponent(key)}`, { method: 'DELETE' });
+export const fetchHistory = () => json<HistoryEntry[]>('/api/history');
+export const clearHistory = () => json<{ ok: true }>('/api/history', { method: 'DELETE' });
 
 function saveBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob);

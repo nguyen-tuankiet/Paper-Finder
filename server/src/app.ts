@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import cors from 'cors';
@@ -11,12 +11,16 @@ import type { AppConfig } from './config.js';
 import { UpstreamError } from './lib/errors.js';
 import type { Logger } from './logger.js';
 import { exportRequestSchema, searchRequestSchema } from './schemas.js';
-import { CONTENT_TYPES, exportFilename, toCsv, toXlsx } from './services/export.js';
+import { CONTENT_TYPES, exportFilename, toBibtex, toCsv, toRis, toXlsx } from './services/export.js';
 import { SourceHealthService } from './services/health.js';
 import { runSearch, type AdapterMap } from './services/search.js';
 import { StatsService } from './services/stats.js';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { PRO_EXPORT_FORMATS } from '../../shared/types.js';
+import { currentUser, identityOf, type AccountsContext } from './accounts/context.js';
+import { MAX_HISTORY_ENTRIES, registerAccountRoutes } from './accounts/routes.js';
+import { isProActive } from './accounts/types.js';
 import { DEFAULT_DOWNLOAD_OPTIONS, DownloadError, UrlSigner, openPdf, safePdfFileName, type DownloadErrorCode, type DownloadOptions } from './services/download.js';
 
 const DOWNLOAD_STATUS: Record<DownloadErrorCode, number> = {
@@ -41,6 +45,8 @@ export interface AppDeps {
   logger: Logger;
   /** Thống kê sử dụng; mặc định chỉ lưu trong bộ nhớ. */
   stats?: StatsService;
+  /** Tài khoản, hạn mức lượt tìm và gói Pro. Không truyền = tắt: ai cũng tìm không giới hạn như trước. */
+  accounts?: AccountsContext;
 }
 
 /** So sánh mật khẩu không lộ thông tin qua thời gian xử lý. */
@@ -54,7 +60,7 @@ function issuesOf(error: ZodError) {
   return error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message }));
 }
 
-export function createApp({ adapters, config, logger, stats = new StatsService(), signer = new UrlSigner(), downloadOptions }: AppDeps) {
+export function createApp({ adapters, config, logger, stats = new StatsService(), signer = new UrlSigner(), downloadOptions, accounts }: AppDeps) {
   const downloadOpts: DownloadOptions = { ...DEFAULT_DOWNLOAD_OPTIONS, ...downloadOptions };
   let activeDownloads = 0;
   const app = express();
@@ -93,6 +99,25 @@ export function createApp({ adapters, config, logger, stats = new StatsService()
     legacyHeaders: false,
     message: { error: 'rate_limited', message: 'Nhập sai quá nhiều lần. Vui lòng thử lại sau 15 phút.' },
   });
+
+  const checkAdmin = (req: Request): 'ok' | 'off' | 'bad' => {
+    if (!config.adminPassword) return 'off';
+    const header = req.get('authorization') ?? '';
+    const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+    return token && safeEqual(token, config.adminPassword) ? 'ok' : 'bad';
+  };
+
+  if (accounts) registerAccountRoutes(app, { ctx: accounts, logger, checkAdmin, adminLimiter });
+  else {
+    // Tính năng tài khoản tắt: giao diện vẫn hỏi /api/me và /api/plans để biết có cần hiện nút đăng nhập hay không.
+    app.get('/api/me', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ accountsEnabled: false, user: null, quota: { limit: null, used: 0, remaining: null, resetsAt: null } });
+    });
+    app.get('/api/plans', (_req, res) => {
+      res.json({ accountsEnabled: false, billingEnabled: false, freeDailySearches: 0, guestDailySearches: 0, plans: [] });
+    });
+  }
 
   app.get('/api/admin/stats', adminLimiter, (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -133,6 +158,28 @@ export function createApp({ adapters, config, logger, stats = new StatsService()
       return;
     }
 
+    // Hạn mức lượt tìm: mỗi từ khóa một lượt; gói Pro không giới hạn.
+    let billed: Awaited<ReturnType<typeof identityOf>> | undefined;
+    const keywordCount = request.keywords.length;
+    if (accounts) {
+      billed = await identityOf(accounts, req);
+      const charge = await accounts.quota.consume(billed.identity, keywordCount);
+      if (!charge.ok) {
+        const { limit = 0, remaining = 0 } = charge.quota;
+        const partial = (remaining ?? 0) > 0;
+        const message = partial
+          ? `Lần tìm này có ${keywordCount} từ khóa (mỗi từ khóa tính một lượt) nhưng hôm nay bạn chỉ còn ${remaining} lượt. Hãy bớt từ khóa hoặc nâng cấp Pro.`
+          : billed.user
+            ? `Bạn đã dùng hết ${limit} lượt tìm miễn phí hôm nay. Nâng cấp Pro để tìm không giới hạn, hoặc quay lại vào ngày mai.`
+            : `Bạn đã dùng hết ${limit} lượt tìm của khách hôm nay. Đăng nhập để có ${accounts.limits.freeDailySearches} lượt mỗi ngày, hoặc nâng cấp Pro để không giới hạn.`;
+        res.status(429).json({ error: 'quota_exceeded', message, quota: charge.quota, signedIn: Boolean(billed.user) });
+        return;
+      }
+    }
+    const refund = () => {
+      if (accounts && billed) void accounts.quota.refund(billed.identity, keywordCount).catch(() => undefined);
+    };
+
     stats.recordSearchStarted();
     stats.recordSearchSources(request.sources);
 
@@ -167,7 +214,15 @@ export function createApp({ adapters, config, logger, stats = new StatsService()
           ? { kind: 'completed', total: result.stats.total, sources: result.sources }
           : { kind: 'failed', sources: result.sources },
       );
+      if (result.stats.sourcesSucceeded === 0) refund(); // không nguồn nào trả lời: không tính lượt
+      else if (accounts && billed?.user && isProActive(billed.user, accounts.now())) {
+        // Lịch sử tìm kiếm chỉ lưu cho gói Pro (lưu điều kiện tìm, không lưu kết quả).
+        void accounts.store
+          .addHistory(billed.user.id, { id: randomUUID(), at: accounts.now().toISOString(), request, total: result.stats.total }, MAX_HISTORY_ENTRIES)
+          .catch((error: unknown) => logger.error('history_failed', { error: error instanceof Error ? error.message : String(error) }));
+      }
     } catch (error) {
+      refund();
       if (error instanceof UpstreamError && error.code === 'cancelled') {
         stats.recordSearchOutcome({ kind: 'cancelled' });
       } else {
@@ -258,7 +313,21 @@ export function createApp({ adapters, config, logger, stats = new StatsService()
       return;
     }
     const { format, records } = parsed.data;
-    const body = format === 'csv' ? toCsv(records) : await toXlsx(records);
+    if ((PRO_EXPORT_FORMATS as readonly string[]).includes(format)) {
+      // BibTeX/RIS là tính năng gói Pro. Khi tài khoản tắt thì không khóa (giữ nguyên hành vi cũ).
+      if (accounts) {
+        const user = await currentUser(accounts, req);
+        if (!user) {
+          res.status(401).json({ error: 'unauthorized', message: 'Vui lòng đăng nhập để xuất BibTeX/RIS.' });
+          return;
+        }
+        if (!isProActive(user, accounts.now())) {
+          res.status(402).json({ error: 'pro_required', message: 'Xuất BibTeX/RIS dành cho gói Pro.' });
+          return;
+        }
+      }
+    }
+    const body = format === 'csv' ? toCsv(records) : format === 'bibtex' ? toBibtex(records) : format === 'ris' ? toRis(records) : await toXlsx(records);
     stats.recordExport();
     const filename = exportFilename(format);
     res.setHeader('Content-Type', CONTENT_TYPES[format]);

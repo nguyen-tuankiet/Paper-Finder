@@ -48,7 +48,7 @@ export const searchRequestSchema = z
 const exportRecordSchema = z.object({
   title: z.string().max(5000),
   doi: z.string().max(500),
-  authors: z.array(z.object({ name: z.string().max(500) })).max(5000),
+  authors: z.array(z.object({ name: z.string().max(500), given: z.string().max(500).optional(), family: z.string().max(500).optional() })).max(5000),
   publicationYear: z.number().int().nullable(),
   journal: z.string().max(2000),
   publisher: z.string().max(2000),
@@ -60,9 +60,48 @@ const exportRecordSchema = z.object({
   oaUrl: z.string().max(5000).optional(),
   oaPdfUrl: z.string().max(5000).optional(),
   oaLicense: z.string().max(100).optional(),
+  volume: z.string().max(100).optional(),
+  issue: z.string().max(100).optional(),
+  pages: z.string().max(100).optional(),
+  place: z.string().max(500).optional(),
 });
 
 export const exportRequestSchema = z.object({
-  format: z.enum(['xlsx', 'csv']),
+  format: z.enum(['xlsx', 'csv', 'bibtex', 'ris']),
   records: z.array(exportRecordSchema).min(1, 'Không có bài báo nào để xuất.').max(20000),
 });
+
+// ---------- Tài khoản ----------
+
+const email = z
+  .string()
+  .transform((v) => v.trim().toLowerCase())
+  .pipe(z.string().max(254, 'Email quá dài.').regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Email không hợp lệ.'));
+
+const password = z.string().min(8, 'Mật khẩu cần ít nhất 8 ký tự.').max(200, 'Mật khẩu tối đa 200 ký tự.');
+
+export const registerSchema = z.object({ email, password }).strict();
+export const loginSchema = z.object({ email, password: z.string().min(1).max(200) }).strict();
+export const changePasswordSchema = z.object({ currentPassword: z.string().min(1).max(200), newPassword: password }).strict();
+export const checkoutSchema = z.object({ plan: z.enum(['month', 'year']) }).strict();
+export const confirmPaymentSchema = z.object({ orderCode: z.number().int().positive() }).strict();
+
+/** Bài lưu vào thư viện: giữ nguyên bản ghi PaperRecord của giao diện, chỉ kiểm tra các trường cốt lõi và giới hạn kích thước. */
+export const savedPaperSchema = z.looseObject({
+  id: z.string().max(200),
+  title: z.string().max(5000),
+  doi: z.string().max(500),
+  authors: z.array(z.looseObject({ name: z.string().max(500) })).max(500),
+  publicationYear: z.number().int().nullable(),
+  journal: z.string().max(2000),
+  publisher: z.string().max(2000),
+  documentType: z.string().max(200),
+  abstract: z.string().max(60_000),
+  sources: z.array(z.string().max(50)).max(10),
+  originalUrl: z.string().max(5000),
+  queryKeywords: z.array(z.string().max(500)).max(50),
+});
+
+export const saveLibrarySchema = z.object({ record: savedPaperSchema, folder: z.string().trim().max(60).default('') }).strict();
+
+export const adminGrantSchema = z.object({ email, days: z.number().int().min(1).max(3650) }).strict();
