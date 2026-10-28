@@ -10,6 +10,10 @@ export const UNRESTRICTED: Entitlements = {
   maxResultsPerSource: 500,
   exportRows: null,
   referenceExport: true,
+  wordExport: true,
+  doiLookupMax: 500,
+  citationTools: true,
+  journalRank: true,
   libraryMax: 0,
   historyMax: 0,
 };

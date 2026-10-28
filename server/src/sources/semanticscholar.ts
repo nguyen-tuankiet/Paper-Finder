@@ -3,13 +3,14 @@ import { doiUrl, normalizeDoi } from '../lib/doi.js';
 import { UpstreamError, toUpstreamError } from '../lib/errors.js';
 import { openAccess } from '../lib/oa.js';
 import { biblio } from '../lib/biblio.js';
+import { recordSignals } from '../lib/signals.js';
 import type { HttpClient } from '../lib/http.js';
 import type { Limiter } from '../lib/limiter.js';
 import { cleanAbstract, cleanText, safeHttpUrl } from '../lib/text.js';
 import { Collector, toYear } from './collector.js';
 import type { AdapterResult, AdapterSearchParams, SourceAdapter } from './types.js';
 
-const FIELDS = 'title,externalIds,year,authors,venue,journal,publicationTypes,abstract,url,isOpenAccess,openAccessPdf';
+const FIELDS = 'title,externalIds,year,authors,venue,journal,publicationTypes,abstract,url,isOpenAccess,openAccessPdf,citationCount';
 const PAGE_SIZE = 100;
 /** Giới hạn của endpoint search: offset + limit < 1000. */
 const MAX_DEPTH = 999;
@@ -28,6 +29,7 @@ interface S2Paper {
   url?: string | null;
   isOpenAccess?: boolean | null;
   openAccessPdf?: { url?: string | null; status?: string | null; license?: string | null } | null;
+  citationCount?: number | null;
 }
 
 interface S2Response {
@@ -65,6 +67,7 @@ export function mapSemanticScholarPaper(raw: unknown, keyword: string, retrieved
       oaPdfUrl: paper.openAccessPdf?.url ?? '',
       oaLicense: paper.openAccessPdf?.license ?? '',
     }),
+    ...recordSignals({ citedBy: paper.citationCount }),
     sources: ['semanticscholar'],
     sourceRefs: [{ source: 'semanticscholar', sourceId: paper.paperId, url: pageUrl }],
     originalUrl: doi ? doiUrl(doi) : pageUrl,

@@ -30,9 +30,15 @@ export interface ResultFilters {
   type: string;
   /** free = có bản đọc miễn phí; notfound = chưa thấy bản miễn phí (không có nghĩa chắc chắn mất phí). */
   access: 'all' | 'free' | 'notfound';
+  /** Chỉ giữ bài có ít nhất chừng này lượt trích dẫn; null = không lọc. */
+  minCited: number | null;
+  /** Lọc theo hạng phần tư SJR của tạp chí: q1 = chỉ Q1, q12 = Q1 và Q2. */
+  quartile: 'all' | 'q1' | 'q12';
+  /** Ẩn các bài đã bị rút lại. */
+  hideRetracted: boolean;
 }
 
-export const DEFAULT_FILTERS: ResultFilters = { text: '', doi: 'all', source: 'all', type: '', access: 'all' };
+export const DEFAULT_FILTERS: ResultFilters = { text: '', doi: 'all', source: 'all', type: '', access: 'all', minCited: null, quartile: 'all', hideRetracted: false };
 
 /** "cc-by-nc-nd" -> "CC BY-NC-ND", "cc by" -> "CC BY", "cc0" -> "CC0"; giấy phép khác giữ nguyên. */
 export function formatLicense(license: string): string {
@@ -66,6 +72,10 @@ export function filterRecords(records: PaperRecord[], filters: ResultFilters): P
     if (filters.type && record.documentType !== filters.type) return false;
     if (filters.access === 'free' && !record.isOpenAccess) return false;
     if (filters.access === 'notfound' && record.isOpenAccess) return false;
+    if (filters.minCited !== null && (record.citedByCount ?? 0) < filters.minCited) return false;
+    if (filters.quartile === 'q1' && record.journalQuartile !== 'Q1') return false;
+    if (filters.quartile === 'q12' && record.journalQuartile !== 'Q1' && record.journalQuartile !== 'Q2') return false;
+    if (filters.hideRetracted && record.isRetracted) return false;
     if (needle) {
       const haystack = fold(
         [record.title, record.doi, record.journal, record.publisher, record.authors.map((a) => a.name).join(' '), record.queryKeywords.join(' ')].join(' '),
@@ -85,6 +95,20 @@ export function sortByYear(records: PaperRecord[], order: 'ascend' | 'descend' |
     if (a.publicationYear === null) return 1;
     if (b.publicationYear === null) return -1;
     return (a.publicationYear - b.publicationYear) * sign;
+  });
+}
+
+/** Sắp theo số trích dẫn; bài không có số liệu luôn xếp cuối dù tăng hay giảm. */
+export function sortByCitations(records: PaperRecord[], order: 'ascend' | 'descend' | null | undefined): PaperRecord[] {
+  if (!order) return records;
+  const sign = order === 'ascend' ? 1 : -1;
+  return [...records].sort((a, b) => {
+    const x = a.citedByCount;
+    const y = b.citedByCount;
+    if (x === undefined && y === undefined) return 0;
+    if (x === undefined) return 1;
+    if (y === undefined) return -1;
+    return (x - y) * sign;
   });
 }
 
@@ -134,6 +158,10 @@ export function pdfFileName(record: Pick<PaperRecord, 'title' | 'doi'>): string 
   return `${base || 'paper'}.pdf`;
 }
 
+export function docxFileName(date: Date = new Date()): string {
+  return `paperfinder_tai_lieu_tham_khao_${localDateStamp(date)}.docx`;
+}
+
 export function exportFileName(format: ExportFormat, date: Date = new Date()): string {
   return `paperfinder_results_${localDateStamp(date)}.${format === 'bibtex' ? 'bib' : format}`;
 }
@@ -148,6 +176,9 @@ export function toExportPayload(records: PaperRecord[]) {
     issue: r.issue,
     pages: r.pages,
     place: r.place,
+    citedByCount: r.citedByCount,
+    isRetracted: r.isRetracted,
+    journalQuartile: r.journalQuartile,
     publicationYear: r.publicationYear,
     journal: r.journal,
     publisher: r.publisher,

@@ -3,6 +3,7 @@ import { normalizeDoi, doiUrl } from '../lib/doi.js';
 import { UpstreamError, toUpstreamError } from '../lib/errors.js';
 import { openAccess } from '../lib/oa.js';
 import { biblio, formatEventDates } from '../lib/biblio.js';
+import { recordSignals } from '../lib/signals.js';
 import type { HttpClient } from '../lib/http.js';
 import type { Limiter } from '../lib/limiter.js';
 import { cleanAbstract, cleanText, safeHttpUrl } from '../lib/text.js';
@@ -26,6 +27,9 @@ const SELECT = [
   'issue',
   'page',
   'publisher-location',
+  'is-referenced-by-count',
+  'ISSN',
+  'updated-by',
 ].join(',');
 
 const PAGE_SIZE = 100;
@@ -57,6 +61,14 @@ interface CrossrefItem {
   type?: string;
   URL?: string;
   abstract?: string;
+  'is-referenced-by-count'?: number;
+  ISSN?: unknown;
+  'updated-by'?: unknown;
+}
+
+/** Crossref đưa dữ liệu Retraction Watch vào `updated-by`; bài bị rút lại có một mục loại `retraction`. */
+function isRetractedByCrossref(value: unknown): boolean {
+  return Array.isArray(value) && value.some((u) => u && typeof u === 'object' && (u as { type?: unknown }).type === 'retraction');
 }
 
 interface CrossrefResponse {
@@ -132,6 +144,7 @@ export function mapCrossrefItem(raw: unknown, keyword: string, retrievedAt: stri
     }),
     // Crossref không cho biết chắc bài có bản mở hay không nên không suy đoán; trạng thái được bổ sung khi gộp với nguồn khác.
     ...openAccess(),
+    ...recordSignals({ citedBy: item['is-referenced-by-count'], retracted: isRetractedByCrossref(item['updated-by']), issns: item.ISSN }),
     sources: ['crossref'],
     sourceRefs: doi ? [{ source: 'crossref', sourceId: doi, url: doiUrl(doi) }] : [],
     originalUrl: safeHttpUrl(item.URL) || (doi ? doiUrl(doi) : ''),
@@ -210,6 +223,20 @@ export class CrossrefAdapter implements SourceAdapter {
       return { records: records.slice(0, params.maxResults) };
     } catch (error) {
       return { records, error: toUpstreamError(error) };
+    }
+  }
+
+  /** Tra một DOI qua /works/{doi}. Route này không hỗ trợ `select` nên nhận bản ghi đầy đủ. */
+  async lookupDoi(doi: string, signal?: AbortSignal): Promise<PaperRecord | null> {
+    const url = `${this.baseUrl}/works/${doi.split('/').map(encodeURIComponent).join('/')}`;
+    try {
+      const data = await this.options.http.getJson<{ status?: string; message?: unknown }>(url, { source: this.label, limiter: this.options.limiter, signal });
+      const record = data?.status === 'ok' ? mapCrossrefItem(data.message, '', this.now().toISOString()) : null;
+      if (record) record.queryKeywords = [];
+      return record;
+    } catch (error) {
+      if (error instanceof UpstreamError && error.status === 404) return null;
+      throw error;
     }
   }
 

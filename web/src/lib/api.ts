@@ -12,6 +12,7 @@ import type {
   PlansResponse,
   SearchEvent,
   SearchRequest,
+  SearchResult,
   SourceHealth,
   UsageReport,
 } from '../../../shared/types';
@@ -125,6 +126,29 @@ export async function fetchUsageReport(password: string, days: number, signal?: 
 export interface ExportOutcome {
   /** Gói hiện tại chỉ cho xuất một phần: số dòng đã xuất và tổng số dòng. */
   truncated?: { rows: number; total: number };
+}
+
+/** Xuất danh sách tài liệu tham khảo (đã định dạng sẵn từng dòng) ra file Word. */
+export async function exportDocx(lines: string[], fileName: string): Promise<void> {
+  const response = await request('/api/export/docx', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ lines }) });
+  if (!response.ok) throw await httpError(response);
+  saveBlob(await response.blob(), fileName);
+}
+
+export interface LookupResponse {
+  result: SearchResult;
+  /** DOI mà các nguồn không có. */
+  notFound: string[];
+  /** DOI tra lỗi, thử lại có thể được. */
+  failed: string[];
+  /** Dòng đã dán nhưng không có DOI. */
+  invalid: string[];
+  duplicates: number;
+}
+
+/** Dán danh sách DOI, nhận thông tin từng bài (cùng dạng kết quả tìm kiếm). Cần hạng Tiêu chuẩn trở lên khi bật tài khoản. */
+export async function lookupDois(text: string, signal?: AbortSignal): Promise<LookupResponse> {
+  return json<LookupResponse>('/api/lookup', { method: 'POST', body: JSON.stringify({ text }), signal });
 }
 
 export async function exportRecords(format: ExportFormat, records: PaperRecord[], fileName: string): Promise<ExportOutcome> {

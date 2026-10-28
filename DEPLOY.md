@@ -83,6 +83,12 @@ Mặc định tính năng này **tắt**: ai cũng dùng đầy đủ không gi�
 | Thư viện cá nhân | không | không | 200 bài | 5.000 bài |
 | Lịch sử tìm kiếm | không | không | 20 lần | 50 lần |
 | Xuất BibTeX/RIS | không | không | không | có |
+| Xuất tài liệu tham khảo ra Word (.docx) | không | không | có | có |
+| Dán danh sách DOI để lấy tài liệu tham khảo chuẩn | không | không | tối đa 100 DOI/lần | tối đa 500 DOI/lần |
+| Sắp xếp/lọc theo số trích dẫn | không | không | có | có |
+| Xếp hạng tạp chí Q1–Q4 (SJR) và lọc theo hạng | không | không | có | có |
+
+Mọi hạng (kể cả khách) đều thấy **số trích dẫn** và **nhãn "đã bị rút lại"** trên từng bài, vì đây là thông tin giúp tránh trích nhầm. Hạng trả phí được thêm công cụ sắp xếp/lọc theo chúng. Việc khóa sắp xếp/lọc theo trích dẫn chỉ ở giao diện (dữ liệu đã nằm sẵn trong kết quả); xếp hạng Q, Word và tra DOI thì máy chủ kiểm tra quyền.
 
 Hạng Tiêu chuẩn và Pro mua theo thời hạn 7 ngày, 1 tháng hoặc 1 năm (6 gói, giá ở `.env.example`). Mọi giới hạn nằm trong **một hàm** `buildEntitlements` ở `server/src/accounts/plans.ts`; sửa ở đó để đổi chính sách. Mỗi từ khóa trong một lần tìm tính một lượt; lần tìm mà không nguồn nào trả kết quả (hoặc bị hủy) được hoàn lại lượt. Khách được tính theo IP nên đổi mạng là có lượt mới; hãy coi đây là giới hạn mềm.
 
@@ -131,7 +137,11 @@ Invoke-RestMethod -Method Post -Uri https://<địa-chỉ>/api/admin/grant -Head
 Invoke-RestMethod -Uri https://<địa-chỉ>/api/admin/accounts -Headers $h   # số người dùng, số người đang dùng từng hạng, doanh thu
 ```
 
-### 7.5. Việc cần làm ngoài mã nguồn
+### 7.5. Xếp hạng tạp chí Q1–Q4 (SJR) — cần bạn nạp dữ liệu
+
+Ứng dụng **không kèm sẵn** dữ liệu xếp hạng vì nó thuộc SCImago (dựa trên dữ liệu Scopus của Elsevier) và điều khoản sử dụng/phân phối lại chưa được tôi xác nhận. Cách làm: bạn tự vào [scimagojr.com](https://www.scimagojr.com/journalrank.php), **đọc điều khoản sử dụng của họ**, chọn năm rồi bấm tải file CSV ("Download data"), và đặt vào `server/data/scimagojr.csv` (hoặc đường dẫn khác qua biến `SJR_CSV_PATH`). Khởi động lại máy chủ; log `server_started` sẽ có `journalRank` là số tạp chí đã nạp. Không có file thì tính năng tự tắt và không được quảng cáo trong hộp thoại chọn gói. Hạng được ghép theo **ISSN** nên tạp chí thiếu ISSN hoặc không có trong file sẽ không có hạng. Hạng thay đổi theo năm: hãy cập nhật file hằng năm và ghi rõ năm dữ liệu cho người dùng nếu cần. Trên Render, thư mục `server/data` bị xóa khi khởi động lại, nên cần đưa file vào bản deploy (ví dụ bỏ file khỏi `.gitignore` và commit nếu điều khoản cho phép) hoặc dùng ổ đĩa bền.
+
+### 7.6. Việc cần làm ngoài mã nguồn
 
 - Cập nhật **chính sách bảo mật** nếu bạn đổi cách xử lý dữ liệu (mặc định đã mô tả email, mật khẩu băm, cookie phiên, thư viện và lịch sử).
 - Kinh doanh thu tiền cần tuân thủ quy định đăng ký kinh doanh và thuế tại Việt Nam; hãy hỏi kế toán hoặc cơ quan thuế.

@@ -65,9 +65,9 @@ export const FREE_EXPORT_ROWS = 50;
  */
 export function buildEntitlements(config: EntitlementConfig): Record<Tier, Entitlements> {
   return {
-    guest: { tier: 'guest', label: TIER_LABEL.guest, dailySearches: config.guestDailySearches, maxResultsPerSource: 20, exportRows: 0, referenceExport: false, libraryMax: 0, historyMax: 0 },
-    free: { tier: 'free', label: TIER_LABEL.free, dailySearches: config.freeDailySearches, maxResultsPerSource: 50, exportRows: FREE_EXPORT_ROWS, referenceExport: false, libraryMax: 0, historyMax: 0 },
-    standard: { tier: 'standard', label: TIER_LABEL.standard, dailySearches: null, maxResultsPerSource: 200, exportRows: null, referenceExport: false, libraryMax: 200, historyMax: 20 },
-    pro: { tier: 'pro', label: TIER_LABEL.pro, dailySearches: null, maxResultsPerSource: 500, exportRows: null, referenceExport: true, libraryMax: 5000, historyMax: 50 },
+    guest: { tier: 'guest', label: TIER_LABEL.guest, dailySearches: config.guestDailySearches, maxResultsPerSource: 20, exportRows: 0, referenceExport: false, wordExport: false, doiLookupMax: 0, citationTools: false, journalRank: false, libraryMax: 0, historyMax: 0 },
+    free: { tier: 'free', label: TIER_LABEL.free, dailySearches: config.freeDailySearches, maxResultsPerSource: 50, exportRows: FREE_EXPORT_ROWS, referenceExport: false, wordExport: false, doiLookupMax: 0, citationTools: false, journalRank: false, libraryMax: 0, historyMax: 0 },
+    standard: { tier: 'standard', label: TIER_LABEL.standard, dailySearches: null, maxResultsPerSource: 200, exportRows: null, referenceExport: false, wordExport: true, doiLookupMax: 100, citationTools: true, journalRank: true, libraryMax: 200, historyMax: 20 },
+    pro: { tier: 'pro', label: TIER_LABEL.pro, dailySearches: null, maxResultsPerSource: 500, exportRows: null, referenceExport: true, wordExport: true, doiLookupMax: 500, citationTools: true, journalRank: true, libraryMax: 5000, historyMax: 50 },
   };
 }

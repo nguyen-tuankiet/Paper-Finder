@@ -1,5 +1,5 @@
 import { BookOutlined, CopyOutlined } from '@ant-design/icons';
-import { Button, Descriptions, Drawer, Space, Tag, Typography, message } from 'antd';
+import { Alert, Button, Descriptions, Drawer, Space, Tag, Typography, message } from 'antd';
 import type { PaperRecord } from '../../../shared/types';
 import { copyText } from '../lib/clipboard';
 import { CITATION_STYLE_LABELS, formatApaInText, formatReference, type CitationStyle } from '../lib/citation';
@@ -37,6 +37,7 @@ export function DetailDrawer({ record, citationStyle, customCitation, onClose }:
               </Button>
             )}
           </Space>
+          {record.isRetracted && <Alert type="error" showIcon title="Bài này đã bị rút lại" description="Theo Crossref/Retraction Watch hoặc OpenAlex. Không nên trích dẫn như một nguồn đáng tin cậy." />}
           <Descriptions column={1} bordered size="small" labelStyle={{ width: 150 }}>
             <Descriptions.Item label="DOI">
               {record.doi ? (
@@ -65,6 +66,18 @@ export function DetailDrawer({ record, citationStyle, customCitation, onClose }:
             </Descriptions.Item>
             <Descriptions.Item label="Năm xuất bản">{record.publicationYear ?? muted(NO_DATA)}</Descriptions.Item>
             <Descriptions.Item label="Tạp chí / hội nghị">{record.journal || muted(NO_DATA)}</Descriptions.Item>
+            {record.journalQuartile && (
+              <Descriptions.Item label="Hạng tạp chí">
+                <Tag color={{ Q1: 'green', Q2: 'blue', Q3: 'orange', Q4: 'default' }[record.journalQuartile]}>{record.journalQuartile}</Tag>
+                <Typography.Text type="secondary">
+                  {record.journalSjr ? `SJR ${record.journalSjr.toFixed(2)} · ` : ''}theo SCImago (dựa trên dữ liệu Scopus); hạng thay đổi theo năm
+                </Typography.Text>
+              </Descriptions.Item>
+            )}
+            <Descriptions.Item label="Số trích dẫn">
+              {record.citedByCount === undefined ? muted(NO_DATA) : new Intl.NumberFormat('vi-VN').format(record.citedByCount)}
+              {record.citedByCount !== undefined && <Typography.Text type="secondary"> · lớn nhất giữa các nguồn, mỗi nguồn đếm khác nhau</Typography.Text>}
+            </Descriptions.Item>
             <Descriptions.Item label="Nhà xuất bản">{record.publisher || muted(NO_DATA)}</Descriptions.Item>
             <Descriptions.Item label="Loại tài liệu">
               {record.documentType ? `${docTypeLabel(record.documentType)} (${record.documentType})` : muted(NO_DATA)}

@@ -19,6 +19,8 @@ export interface AccountRouteDeps {
   /** Kiểm tra mật khẩu admin: 'off' = chưa bật trang admin, 'bad' = sai mật khẩu. */
   checkAdmin: (req: Request) => 'ok' | 'off' | 'bad';
   adminLimiter: RequestHandler;
+  /** Máy chủ đã nạp dữ liệu xếp hạng tạp chí. */
+  journalRankAvailable: boolean;
 }
 
 const issues = (error: { issues: { path: PropertyKey[]; message: string }[] }) => error.issues.map((i) => ({ path: i.path.join('.'), message: i.message }));
@@ -43,7 +45,7 @@ const wrap =
     handler(req, res).catch(next);
   };
 
-export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, adminLimiter }: AccountRouteDeps): void {
+export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, adminLimiter, journalRankAvailable }: AccountRouteDeps): void {
   const authLimiter = rateLimit({
     windowMs: 15 * 60_000,
     limit: ctx.rateLimits.loginFailuresPer15Min,
@@ -94,6 +96,7 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
       billingEnabled: ctx.billing.enabled,
       tiers: [ctx.entitlements.guest, ctx.entitlements.free, ctx.entitlements.standard, ctx.entitlements.pro],
       plans: ctx.billing.plans(),
+      journalRankAvailable,
     };
     res.json(body);
   });

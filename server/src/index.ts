@@ -4,6 +4,7 @@ import { loadEnvFiles, parseConfig } from './config.js';
 import { HttpClient } from './lib/http.js';
 import { Limiter } from './lib/limiter.js';
 import { createLogger } from './logger.js';
+import { JournalRanker } from './services/journalRank.js';
 import { StatsService } from './services/stats.js';
 import { UrlSigner } from './services/download.js';
 import { CrossrefAdapter } from './sources/crossref.js';
@@ -47,12 +48,14 @@ if (config.semanticScholarApiKey) {
 
 const stats = new StatsService({ filePath: config.statsFile, timezone: config.statsTimezone, retentionDays: config.statsRetentionDays, logger });
 const accounts = await buildAccounts(config, logger);
+const journalRanker = JournalRanker.fromFile(config.sjrCsvPath);
 const app = createApp({
   adapters,
   config,
   logger,
   stats,
   accounts,
+  journalRanker,
   signer: new UrlSigner(config.downloadSecret),
   downloadOptions: { maxBytes: config.downloadMaxBytes },
 });
@@ -64,6 +67,7 @@ const server = app.listen(config.port, () => {
     sources: Object.keys(adapters),
     adminEnabled: Boolean(config.adminPassword),
     accounts: accounts ? accounts.store.kind : 'off',
+    journalRank: journalRanker ? journalRanker.size : 'off',
     billing: Boolean(accounts && config.payos),
     serveStatic: Boolean(config.staticDir),
   });

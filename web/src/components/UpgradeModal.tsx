@@ -10,12 +10,16 @@ const money = (value: number) => `${new Intl.NumberFormat('vi-VN').format(value)
 const fmt = (n: number) => new Intl.NumberFormat('vi-VN').format(n);
 
 /** Danh sách quyền lợi của một hạng để hiển thị trong hộp thoại chọn gói. */
-export function describeTier(e: Entitlements): string[] {
+export function describeTier(e: Entitlements, options: { journalRankAvailable?: boolean } = {}): string[] {
   const lines = [
     e.dailySearches === null ? 'Tìm kiếm không giới hạn lượt mỗi ngày' : `${e.dailySearches} lượt tìm mỗi ngày`,
     `Lấy tới ${e.maxResultsPerSource} kết quả mỗi nguồn`,
     e.exportRows === null ? 'Xuất Excel/CSV không giới hạn số dòng' : e.exportRows === 0 ? 'Không xuất được file' : `Xuất Excel/CSV tối đa ${e.exportRows} dòng`,
   ];
+  if (e.citationTools) lines.push('Sắp xếp và lọc kết quả theo số trích dẫn');
+  if (e.journalRank && options.journalRankAvailable) lines.push('Xếp hạng tạp chí Q1–Q4 (SJR) và lọc theo hạng');
+  if (e.wordExport) lines.push('Xuất tài liệu tham khảo ra file Word (.docx)');
+  if (e.doiLookupMax > 0) lines.push(`Dán danh sách DOI (tới ${fmt(e.doiLookupMax)} DOI mỗi lần) để lấy tài liệu tham khảo chuẩn`);
   if (e.libraryMax > 0) lines.push(`Thư viện cá nhân tới ${fmt(e.libraryMax)} bài, chia thư mục, dùng trên mọi thiết bị`);
   if (e.historyMax > 0) lines.push(`Lịch sử ${e.historyMax} lần tìm gần nhất, chạy lại bằng một lần bấm`);
   if (e.referenceExport) lines.push('Xuất BibTeX và RIS cho Zotero, Mendeley, EndNote');
@@ -102,7 +106,7 @@ export function UpgradeModal({ open, reason, initialTier, onClose, onNeedLogin }
       />
 
       <ul className="pf-pro-benefits">
-        {entitlements && describeTier(entitlements).map((line) => (
+        {entitlements && describeTier(entitlements, { journalRankAvailable: account.plans?.journalRankAvailable }).map((line) => (
           <li key={line}>
             <CheckCircleFilled /> {line}
           </li>

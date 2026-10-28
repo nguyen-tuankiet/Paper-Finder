@@ -75,6 +75,8 @@ npm start                   # backend phục vụ luôn web/dist tại http://lo
 | Method | Đường dẫn | Mô tả |
 | --- | --- | --- |
 | POST | `/api/search` | Tìm kiếm. Trả về NDJSON: các dòng `progress`, rồi một dòng `result`. Đóng kết nối = hủy tác vụ. |
+| POST | `/api/export/docx` | `{lines: [...]}` (các dòng tài liệu tham khảo đã định dạng) → file Word (hạng Tiêu chuẩn trở lên khi bật tài khoản) |
+| POST | `/api/lookup` | `{text}` (mỗi dòng một DOI) → `{result, notFound, failed, invalid, duplicates}` (hạng Tiêu chuẩn trở lên khi bật tài khoản) |
 | POST | `/api/export` | `{format: "xlsx"\|"csv"\|"bibtex"\|"ris", records: [...]}` → file tải về (khi bật tài khoản: cần đăng nhập, hạng Miễn phí cắt còn 50 dòng, BibTeX/RIS chỉ hạng Pro) |
 | GET | `/api/sources` | Danh sách nguồn đang bật và trạng thái kết nối của từng nguồn (cache 60 giây) |
 | GET | `/api/health` | Kiểm tra backend (nhẹ, không gọi nguồn dữ liệu; dùng cho bot giám sát) |
@@ -144,6 +146,14 @@ Hỗ trợ các loại: bài tạp chí, hội nghị, sách, chương sách, lu
 ## Tài khoản, hạng và gói trả phí (tùy chọn)
 
 Đặt `SESSION_SECRET` để bật đăng nhập bằng email + mật khẩu (băm bằng scrypt, đăng ký xong tự đăng nhập, phiên là cookie HttpOnly nhớ ~6 tháng và tự gia hạn). Có bốn hạng: **Khách** (chưa đăng nhập, giới hạn nhiều nhất), **Miễn phí** (đã đăng nhập), **Tiêu chuẩn** và **Pro** (mua 7 ngày / 1 tháng / 1 năm); mỗi hạng khác nhau về lượt tìm mỗi ngày, số kết quả mỗi nguồn, số dòng xuất file, thư viện cá nhân, lịch sử tìm kiếm và xuất BibTeX/RIS (bảng đầy đủ trong `DEPLOY.md` mục 7). Không đặt `SESSION_SECRET` thì mọi thứ chạy như trước (không đăng nhập, không giới hạn). Dữ liệu tài khoản lưu ở PostgreSQL (`DATABASE_URL`) hoặc file JSON khi chạy local; thanh toán qua PayOS, kích hoạt tự động và đúng một lần cho mỗi đơn. Cấu hình, webhook và cấp Pro thủ công: xem `DEPLOY.md` mục 7 và `.env.example`.
+
+## Tín hiệu chất lượng và công cụ cho luận văn
+
+- **Bài đã bị rút lại**: gắn nhãn đỏ và cảnh báo (dữ liệu Retraction Watch qua Crossref `updated-by`, và cờ `is_retracted` của OpenAlex); hiện ở mọi hạng.
+- **Số trích dẫn**: cột "Trích dẫn" (số lớn nhất giữa các nguồn vì mỗi nguồn đếm khác nhau); hạng Tiêu chuẩn trở lên được sắp xếp và lọc theo trích dẫn.
+- **Xếp hạng tạp chí Q1–Q4 (SJR)** và lọc theo hạng: ghép theo ISSN từ file CSV SCImago do chủ web tự nạp (`server/data/scimagojr.csv`, xem `DEPLOY.md` mục 7.5); không kèm sẵn dữ liệu.
+- **Xuất tài liệu tham khảo ra Word (.docx)**: dàn trang sẵn (Times New Roman 13, thụt dòng treo, giãn dòng 1,5) theo kiểu trích dẫn đang chọn. Văn bản trích dẫn là chữ thường, chưa có chữ nghiêng.
+- **Chuẩn hóa danh sách DOI**: dán DOI (hoặc cả đoạn tài liệu tham khảo, link doi.org) để lấy thông tin từng bài từ Crossref + OpenAlex rồi sao chép/xuất như kết quả tìm kiếm. DOI không có ở nguồn nào được liệt kê riêng; DOI tra lỗi tạm thời cũng báo riêng để thử lại.
 
 ## Trang quản trị (thống kê sử dụng)
 

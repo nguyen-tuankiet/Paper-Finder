@@ -10,8 +10,11 @@ import type { Entitlements, SearchEvent } from '../../shared/types.js';
 import type { AppConfig } from './config.js';
 import { UpstreamError } from './lib/errors.js';
 import type { Logger } from './logger.js';
-import { exportRequestSchema, searchRequestSchema } from './schemas.js';
+import { docxRequestSchema, exportRequestSchema, lookupRequestSchema, searchRequestSchema } from './schemas.js';
 import { CONTENT_TYPES, exportFilename, toBibtex, toCsv, toRis, toXlsx } from './services/export.js';
+import { DOCX_CONTENT_TYPE, buildReferencesDocx } from './services/docx.js';
+import type { JournalRanker } from './services/journalRank.js';
+import { extractDois, lookupDois } from './services/lookup.js';
 import { SourceHealthService } from './services/health.js';
 import { runSearch, type AdapterMap } from './services/search.js';
 import { StatsService } from './services/stats.js';
@@ -36,7 +39,20 @@ const DOWNLOAD_STATUS: Record<DownloadErrorCode, number> = {
 const MAX_ACTIVE_DOWNLOADS = 4;
 
 /** Khi tính năng tài khoản tắt: không giới hạn gì (giữ nguyên hành vi trước khi có tài khoản). */
-const UNRESTRICTED: Entitlements = { tier: 'pro', label: 'Đầy đủ', dailySearches: null, maxResultsPerSource: 500, exportRows: null, referenceExport: true, libraryMax: 0, historyMax: 0 };
+const UNRESTRICTED: Entitlements = {
+  tier: 'pro',
+  label: 'Đầy đủ',
+  dailySearches: null,
+  maxResultsPerSource: 500,
+  exportRows: null,
+  referenceExport: true,
+  wordExport: true,
+  doiLookupMax: 500,
+  citationTools: true,
+  journalRank: true,
+  libraryMax: 0,
+  historyMax: 0,
+};
 
 export interface AppDeps {
   /** Ký/kiểm tra link PDF cho /api/download. Mặc định dùng khóa ngẫu nhiên mỗi lần khởi động. */
@@ -49,6 +65,8 @@ export interface AppDeps {
   stats?: StatsService;
   /** Tài khoản, hạn mức lượt tìm và gói Pro. Không truyền = tắt: ai cũng tìm không giới hạn như trước. */
   accounts?: AccountsContext;
+  /** Dữ liệu xếp hạng tạp chí Q1–Q4 (nếu chủ web đã nạp file SCImago). */
+  journalRanker?: JournalRanker;
 }
 
 /** So sánh mật khẩu không lộ thông tin qua thời gian xử lý. */
@@ -62,7 +80,7 @@ function issuesOf(error: ZodError) {
   return error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message }));
 }
 
-export function createApp({ adapters, config, logger, stats = new StatsService(), signer = new UrlSigner(), downloadOptions, accounts }: AppDeps) {
+export function createApp({ adapters, config, logger, stats = new StatsService(), signer = new UrlSigner(), downloadOptions, accounts, journalRanker }: AppDeps) {
   const downloadOpts: DownloadOptions = { ...DEFAULT_DOWNLOAD_OPTIONS, ...downloadOptions };
   let activeDownloads = 0;
   const app = express();
@@ -109,7 +127,7 @@ export function createApp({ adapters, config, logger, stats = new StatsService()
     return token && safeEqual(token, config.adminPassword) ? 'ok' : 'bad';
   };
 
-  if (accounts) registerAccountRoutes(app, { ctx: accounts, logger, checkAdmin, adminLimiter });
+  if (accounts) registerAccountRoutes(app, { ctx: accounts, logger, checkAdmin, adminLimiter, journalRankAvailable: Boolean(journalRanker) });
   else {
     // Tính năng tài khoản tắt: giao diện vẫn hỏi /api/me và /api/plans để biết có cần hiện nút đăng nhập hay không.
     app.get('/api/me', (_req, res) => {
@@ -117,7 +135,7 @@ export function createApp({ adapters, config, logger, stats = new StatsService()
       res.json({ accountsEnabled: false, user: null, tier: 'pro', entitlements: UNRESTRICTED, quota: { limit: null, used: 0, remaining: null, resetsAt: null } });
     });
     app.get('/api/plans', (_req, res) => {
-      res.json({ accountsEnabled: false, billingEnabled: false, tiers: [], plans: [] });
+      res.json({ accountsEnabled: false, billingEnabled: false, tiers: [], plans: [], journalRankAvailable: Boolean(journalRanker) });
     });
   }
 
@@ -211,13 +229,15 @@ export function createApp({ adapters, config, logger, stats = new StatsService()
     const heartbeat = setInterval(() => send({ type: 'ping' }), 10_000);
 
     try {
-      const result = await runSearch(request, {
+      let result = await runSearch(request, {
         adapters,
         signal: controller.signal,
         logger,
         signUrl: (url) => signer.sign(url),
         onProgress: (progress) => send({ type: 'progress', ...progress }),
       });
+      // Xếp hạng tạp chí (Q1–Q4) chỉ gắn cho hạng được xem; khi tài khoản tắt thì mở cho tất cả.
+      if (journalRanker && (!caller || caller.entitlements.journalRank)) result = { ...result, records: journalRanker.enrich(result.records) };
       send({ type: 'result', result });
       stats.recordSearchOutcome(
         result.stats.sourcesSucceeded > 0
@@ -357,6 +377,82 @@ export function createApp({ adapters, config, logger, stats = new StatsService()
       res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Export-Truncated');
     }
     res.send(body);
+  });
+
+  // Word (.docx): giao diện gửi các dòng tài liệu tham khảo đã định dạng, máy chủ dàn trang.
+  app.post('/api/export/docx', limiter, async (req, res) => {
+    const parsed = docxRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'invalid_request', message: 'Danh sách tài liệu tham khảo không hợp lệ.', issues: issuesOf(parsed.error) });
+      return;
+    }
+    if (accounts) {
+      const caller = await callerOf(accounts, req);
+      if (!caller.user) {
+        res.status(401).json({ error: 'unauthorized', message: 'Vui lòng đăng nhập để xuất file Word.' });
+        return;
+      }
+      if (!caller.entitlements.wordExport) {
+        res.status(402).json({ error: 'plan_required', message: 'Xuất file Word dành cho hạng Tiêu chuẩn trở lên.' });
+        return;
+      }
+    }
+    const body = await buildReferencesDocx(parsed.data.lines);
+    stats.recordExport();
+    res.setHeader('Content-Type', DOCX_CONTENT_TYPE);
+    res.setHeader('Content-Disposition', `attachment; filename="paperfinder_tai_lieu_tham_khao_${new Date().toISOString().slice(0, 10)}.docx"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(body);
+  });
+
+  // Chuẩn hóa danh sách DOI: tra thông tin từng DOI rồi trả về như một kết quả tìm kiếm.
+  app.post('/api/lookup', limiter, async (req, res) => {
+    const parsed = lookupRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'invalid_request', message: parsed.error.issues[0]?.message ?? 'Yêu cầu không hợp lệ.', issues: issuesOf(parsed.error) });
+      return;
+    }
+    let maxDois = 500;
+    let caller: Caller | undefined;
+    if (accounts) {
+      caller = await callerOf(accounts, req);
+      if (!caller.user) {
+        res.status(401).json({ error: 'unauthorized', message: 'Vui lòng đăng nhập để dùng tính năng này.' });
+        return;
+      }
+      if (caller.entitlements.doiLookupMax === 0) {
+        res.status(402).json({ error: 'plan_required', message: 'Chuẩn hóa danh sách DOI dành cho hạng Tiêu chuẩn trở lên.' });
+        return;
+      }
+      maxDois = caller.entitlements.doiLookupMax;
+    }
+    if (!Object.values(adapters).some((a) => a?.lookupDoi)) {
+      res.status(503).json({ error: 'unavailable', message: 'Máy chủ chưa bật nguồn hỗ trợ tra DOI.' });
+      return;
+    }
+    const extracted = extractDois(parsed.data.text);
+    if (extracted.dois.length === 0) {
+      res.status(400).json({ error: 'no_doi', message: 'Không tìm thấy DOI nào trong nội dung đã dán. Mỗi dòng một DOI (vd. 10.1000/xyz123) hoặc link doi.org.', invalid: extracted.invalid });
+      return;
+    }
+    if (extracted.dois.length > maxDois) {
+      res.status(400).json({ error: 'too_many', message: `Mỗi lần tra tối đa ${maxDois} DOI (bạn dán ${extracted.dois.length}). Hãy chia nhỏ danh sách.` });
+      return;
+    }
+
+    const controller = new AbortController();
+    res.on('close', () => {
+      if (!res.writableEnded) controller.abort();
+    });
+    try {
+      const outcome = await lookupDois(extracted.dois, { adapters, signal: controller.signal, signUrl: (url) => signer.sign(url) });
+      if (journalRanker && (!caller || caller.entitlements.journalRank)) outcome.result.records = journalRanker.enrich(outcome.result.records);
+      res.json({ result: outcome.result, notFound: outcome.notFound, failed: outcome.failed, invalid: extracted.invalid, duplicates: extracted.duplicates });
+    } catch (error) {
+      if (error instanceof UpstreamError && error.code === 'cancelled') return;
+      logger.error('lookup_failed', { error: error instanceof Error ? error.message : String(error) });
+      if (!res.headersSent) res.status(500).json({ error: 'internal_error', message: 'Không tra được danh sách DOI. Vui lòng thử lại.' });
+    }
   });
 
   app.use('/api', (_req, res) => {

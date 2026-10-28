@@ -3,6 +3,7 @@ import { doiUrl, normalizeDoi } from '../lib/doi.js';
 import { UpstreamError, toUpstreamError } from '../lib/errors.js';
 import { openAccess } from '../lib/oa.js';
 import { biblio } from '../lib/biblio.js';
+import { recordSignals } from '../lib/signals.js';
 import type { HttpClient } from '../lib/http.js';
 import type { Limiter } from '../lib/limiter.js';
 import { cleanAbstract, cleanText, safeHttpUrl } from '../lib/text.js';
@@ -19,7 +20,7 @@ interface DoajBibjson {
   author?: { name?: string; orcid_id?: string }[];
   identifier?: { id?: string; type?: string }[];
   link?: { type?: string; content_type?: string; url?: string }[];
-  journal?: { title?: string; publisher?: string; volume?: string; number?: string };
+  journal?: { title?: string; publisher?: string; volume?: string; number?: string; issns?: unknown };
   start_page?: string;
   end_page?: string;
 }
@@ -61,6 +62,7 @@ export function mapDoajArticle(raw: unknown, keyword: string, retrievedAt: strin
       oaUrl: fulltext?.url,
       oaPdfUrl: Array.isArray(bib.link) ? bib.link.find((l) => /pdf/i.test(l?.content_type ?? '') || /\.pdf(?:$|[?#])/i.test(l?.url ?? ''))?.url : undefined,
     }),
+    ...recordSignals({ issns: bib.journal?.issns }),
     sources: ['doaj'],
     sourceRefs: item.id ? [{ source: 'doaj', sourceId: item.id, url: pageUrl }] : [],
     originalUrl: safeHttpUrl(fulltext?.url) || (doi ? doiUrl(doi) : pageUrl),

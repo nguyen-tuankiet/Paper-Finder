@@ -64,12 +64,23 @@ const exportRecordSchema = z.object({
   issue: z.string().max(100).optional(),
   pages: z.string().max(100).optional(),
   place: z.string().max(500).optional(),
+  citedByCount: z.number().int().min(0).optional(),
+  isRetracted: z.boolean().optional(),
+  journalQuartile: z.enum(['Q1', 'Q2', 'Q3', 'Q4']).optional(),
 });
 
 export const exportRequestSchema = z.object({
   format: z.enum(['xlsx', 'csv', 'bibtex', 'ris']),
   records: z.array(exportRecordSchema).min(1, 'Không có bài báo nào để xuất.').max(20000),
 });
+
+/** Danh sách tài liệu tham khảo đã định dạng sẵn ở giao diện, máy chủ chỉ dàn trang ra file Word. */
+export const docxRequestSchema = z.object({
+  lines: z.array(z.string().max(3000)).min(1, 'Không có tài liệu tham khảo nào để xuất.').max(5000),
+});
+
+/** Văn bản người dùng dán vào (mỗi dòng một DOI hoặc link doi.org). */
+export const lookupRequestSchema = z.object({ text: z.string().min(1, 'Hãy dán ít nhất một DOI.').max(200_000, 'Nội dung dán vào quá dài.') }).strict();
 
 // ---------- Tài khoản ----------
 

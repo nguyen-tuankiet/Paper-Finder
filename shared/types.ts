@@ -64,6 +64,15 @@ export interface PaperRecord {
   /** Tất cả từ khóa truy vấn tìm ra bài báo này. */
   queryKeywords: string[];
   retrievedAt: string;
+  /** Số lần được trích dẫn theo nguồn (lấy số lớn nhất giữa các nguồn vì mỗi nguồn đếm khác nhau). Không có = nguồn không cung cấp. */
+  citedByCount?: number;
+  /** Bài đã bị rút lại theo Crossref/Retraction Watch hoặc OpenAlex. Chỉ có khi true. */
+  isRetracted?: boolean;
+  /** ISSN của tạp chí (dạng chuẩn hóa 8 ký tự, không gạch nối), dùng để tra xếp hạng tạp chí. */
+  issn?: string[];
+  /** Hạng phần tư SJR của tạp chí (Q1 cao nhất) và chỉ số SJR. Chỉ có khi máy chủ đã nạp dữ liệu SCImago và hạng người dùng được xem. */
+  journalQuartile?: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+  journalSjr?: number;
 }
 
 export interface SearchRequest {
@@ -160,6 +169,14 @@ export interface Entitlements {
   exportRows: number | null;
   /** Xuất BibTeX/RIS. */
   referenceExport: boolean;
+  /** Xuất danh sách tài liệu tham khảo ra file Word (.docx). */
+  wordExport: boolean;
+  /** Số DOI tối đa mỗi lần dán để chuẩn hóa thành tài liệu tham khảo (0 = không có tính năng). */
+  doiLookupMax: number;
+  /** Sắp xếp và lọc kết quả theo số trích dẫn. */
+  citationTools: boolean;
+  /** Hiện xếp hạng tạp chí Q1–Q4 và lọc theo hạng (cần máy chủ đã nạp dữ liệu SCImago). */
+  journalRank: boolean;
   /** Số bài tối đa trong thư viện cá nhân (0 = không có thư viện). */
   libraryMax: number;
   /** Số lần tìm gần nhất được lưu trong lịch sử (0 = không lưu). */
@@ -183,6 +200,8 @@ export interface PlansResponse {
   /** Quyền lợi của cả bốn hạng, để giao diện hiển thị bảng so sánh. */
   tiers: Entitlements[];
   plans: PlanOption[];
+  /** Máy chủ đã nạp dữ liệu xếp hạng tạp chí (nếu chưa thì không quảng cáo tính năng này). */
+  journalRankAvailable: boolean;
 }
 
 export interface QuotaInfo {

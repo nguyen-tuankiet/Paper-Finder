@@ -36,6 +36,14 @@ const GUIDE_STEPS: { title: string; body: ReactNode }[] = [
     body: 'Khách (chưa đăng nhập) bị giới hạn nhiều nhất: ít lượt tìm mỗi ngày, ít kết quả mỗi nguồn và không xuất được file. Tạo tài khoản miễn phí (chỉ cần email và mật khẩu, xong là đăng nhập luôn) để có thêm lượt và xuất file (tối đa 50 dòng). Hạng Tiêu chuẩn và Pro bỏ giới hạn lượt tìm, lấy nhiều kết quả hơn, xuất không giới hạn dòng; có thêm thư viện cá nhân (nút “Lưu” ở mỗi bài) và lịch sử tìm kiếm; riêng Pro có xuất BibTeX/RIS cho Zotero, Mendeley, EndNote.',
   },
   {
+    title: 'Số trích dẫn, bài bị rút lại, xếp hạng tạp chí',
+    body: 'Mỗi bài có cột “Trích dẫn” (số lớn nhất giữa các nguồn; mỗi nguồn đếm khác nhau nên có thể lệch so với Google Scholar). Bài đã bị rút lại được gắn nhãn đỏ “Đã bị rút lại” và có cảnh báo phía trên bảng; nên tránh trích dẫn. Nếu trang có dữ liệu xếp hạng, tạp chí được gắn nhãn Q1–Q4 theo SCImago (SJR) và có thể lọc. Từ hạng Tiêu chuẩn có thể sắp xếp và lọc theo trích dẫn và hạng tạp chí.',
+  },
+  {
+    title: 'Chuẩn hóa danh sách DOI và xuất file Word',
+    body: 'Ở khung “Chuẩn hóa danh sách DOI” (hạng Tiêu chuẩn trở lên), dán mỗi dòng một DOI hoặc link doi.org, hoặc cả đoạn tài liệu tham khảo; hệ thống lấy thông tin từng bài và trả về như một kết quả tìm kiếm để bạn sao chép trích dẫn hoặc xuất. Nút “Tài liệu tham khảo (.docx)” trong khung xuất tạo file Word đã dàn trang theo kiểu trích dẫn bạn đang chọn (IEEE, APA 7, mẫu cơ bản hoặc tự soạn).',
+  },
+  {
     title: 'Xử lý bài nghi trùng',
     body: 'Các bài cùng tiêu đề nhưng chưa đủ bằng chứng để tự gộp sẽ nằm ở mục “Nghi trùng cần xem”. Bấm “Xử lý” ngay trên ô đó để giữ cả hai hoặc loại bỏ một bản khỏi danh sách và file xuất.',
   },

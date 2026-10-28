@@ -51,6 +51,8 @@ const envSchema = z.object({
   PAYOS_CLIENT_ID: z.string().min(1).optional(),
   PAYOS_API_KEY: z.string().min(1).optional(),
   PAYOS_CHECKSUM_KEY: z.string().min(1).optional(),
+  /** File CSV xếp hạng tạp chí tải từ scimagojr.com. Mặc định ./data/scimagojr.csv; không có file thì tính năng xếp hạng tự tắt. */
+  SJR_CSV_PATH: z.string().optional(),
   STATIC_DIR: z.string().optional(),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error', 'silent']).default('info'),
 });
@@ -81,6 +83,7 @@ export interface AppConfig {
   prices: Record<PlanKey, number>;
   publicBaseUrl?: string;
   payos?: { clientId: string; apiKey: string; checksumKey: string };
+  sjrCsvPath: string;
   staticDir?: string;
   logLevel: LogLevel;
 }
@@ -146,6 +149,7 @@ export function parseConfig(env: Record<string, string | undefined>, cwd = proce
       parsed.PAYOS_CLIENT_ID && parsed.PAYOS_API_KEY && parsed.PAYOS_CHECKSUM_KEY && parsed.PUBLIC_BASE_URL
         ? { clientId: parsed.PAYOS_CLIENT_ID, apiKey: parsed.PAYOS_API_KEY, checksumKey: parsed.PAYOS_CHECKSUM_KEY }
         : undefined,
+    sjrCsvPath: parsed.SJR_CSV_PATH ? path.resolve(cwd, parsed.SJR_CSV_PATH) : path.resolve(cwd, 'data', 'scimagojr.csv'),
     staticDir,
     logLevel: parsed.LOG_LEVEL,
   };

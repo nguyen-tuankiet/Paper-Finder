@@ -1,7 +1,9 @@
-import { Alert, FloatButton, Layout, Typography } from 'antd';
+import { Alert, Button, FloatButton, Layout, Typography } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PaperRecord, SearchRequest, SearchResult } from '../../shared/types';
 import { AccountMenu } from './components/AccountMenu';
+import { DoiLookupPanel } from './components/DoiLookupPanel';
+import type { LookupResponse } from './lib/api';
 import { AppFooter } from './components/AppFooter';
 import { HistoryDrawer } from './components/HistoryDrawer';
 import { LibraryDrawer } from './components/LibraryDrawer';
@@ -42,6 +44,7 @@ function ResultsView({ result, online }: { result: SearchResult; online: boolean
   );
 
   const withDoi = records.filter((r) => r.doi).length;
+  const retractedCount = records.filter((r) => r.isRetracted).length;
   const stats = { ...result.stats, total: records.length, withDoi, withoutDoi: records.length - withDoi };
 
   const resolve = (pair: (typeof pendingPairs)[number], action: DuplicateAction) => {
@@ -65,8 +68,16 @@ function ResultsView({ result, online }: { result: SearchResult; online: boolean
         <NoResults result={result} />
       ) : (
         <>
+          {retractedCount > 0 && (
+            <Alert
+              type="warning"
+              showIcon
+              title={`Có ${retractedCount} bài đã bị rút lại (retracted) trong kết quả`}
+              description="Bài bị rút lại thường do sai sót nghiêm trọng hoặc gian lận. Không nên trích dẫn chúng như nguồn đáng tin cậy; các bài này được gắn nhãn đỏ trong bảng và có thể ẩn bằng bộ lọc."
+            />
+          )}
           <StatsBar stats={stats} suspectedCount={pendingPairs.length} freeCount={records.filter((r) => r.isOpenAccess).length} onShowSuspected={() => setDupOpen(true)} />
-          <ExportPanel allRecords={records} filtered={filtered} selectedIds={selectedIds} online={online} />
+          <ExportPanel allRecords={records} filtered={filtered} selectedIds={selectedIds} online={online} citationStyle={citationStyle} customCitation={customCitation} />
           <ResultsTable
             allRecords={records}
             filtered={filtered}
@@ -97,6 +108,7 @@ export default function App() {
   const search = useSearch();
   const account = useAccount();
   const [lastRequest, setLastRequest] = useState<SearchRequest | null>(null);
+  const [lookup, setLookup] = useState<LookupResponse | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const available = health.status === 'ready' ? health.sources.map((s) => s.source) : DEFAULT_SOURCES;
@@ -140,6 +152,26 @@ export default function App() {
         {searching && lastRequest && <SearchProgress sources={lastRequest.sources} progress={search.progress} />}
         <EmptyState phase={search.phase} error={search.error} errorCode={search.errorCode} hasResult={search.result !== null} onRetry={lastRequest && search.errorCode !== 'quota_exceeded' && search.errorCode !== 'results_limit' ? () => run(lastRequest) : undefined} />
         {search.result && search.phase === 'done' && <ResultsView key={search.result.finishedAt} result={search.result} online={online} />}
+        <DoiLookupPanel onResult={setLookup} />
+        {lookup && (
+          <>
+            <Alert
+              type={lookup.notFound.length + lookup.failed.length + lookup.invalid.length > 0 ? 'warning' : 'success'}
+              showIcon
+              title={`Đã tra ${lookup.result.records.length} bài từ danh sách DOI`}
+              description={
+                <>
+                  {lookup.duplicates > 0 && <div>Đã bỏ {lookup.duplicates} DOI trùng.</div>}
+                  {lookup.notFound.length > 0 && <div>Không tìm thấy ({lookup.notFound.length}): {lookup.notFound.join(', ')}</div>}
+                  {lookup.failed.length > 0 && <div>Tra bị lỗi, hãy thử lại sau ({lookup.failed.length}): {lookup.failed.join(', ')}</div>}
+                  {lookup.invalid.length > 0 && <div>Dòng không có DOI ({lookup.invalid.length}): {lookup.invalid.join(' | ')}</div>}
+                </>
+              }
+              action={<Button size="small" onClick={() => setLookup(null)}>Xóa kết quả tra cứu</Button>}
+            />
+            <ResultsView key={lookup.result.finishedAt} result={lookup.result} online={online} />
+          </>
+        )}
       </Layout.Content>
       <AppFooter />
       <LibraryDrawer open={libraryOpen} onClose={() => setLibraryOpen(false)} />

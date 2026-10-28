@@ -3,6 +3,7 @@ import { doiUrl, normalizeDoi } from '../lib/doi.js';
 import { UpstreamError, toUpstreamError } from '../lib/errors.js';
 import { looksLikePdf, openAccess } from '../lib/oa.js';
 import { biblio } from '../lib/biblio.js';
+import { recordSignals } from '../lib/signals.js';
 import type { HttpClient } from '../lib/http.js';
 import type { Limiter } from '../lib/limiter.js';
 import { abstractFromInvertedIndex, cleanText, safeHttpUrl } from '../lib/text.js';
@@ -20,6 +21,8 @@ const SELECT = [
   'open_access',
   'best_oa_location',
   'biblio',
+  'cited_by_count',
+  'is_retracted',
 ].join(',');
 
 const MAX_PER_PAGE = 100;
@@ -32,7 +35,7 @@ interface OpenAlexAuthorship {
 interface OpenAlexLocation {
   landing_page_url?: string;
   raw_source_name?: string;
-  source?: { display_name?: string; host_organization_name?: string } | null;
+  source?: { display_name?: string; host_organization_name?: string; issn?: unknown; issn_l?: string | null } | null;
 }
 
 interface OpenAlexOpenAccess {
@@ -60,6 +63,8 @@ interface OpenAlexWork {
   primary_location?: OpenAlexLocation | null;
   type?: string | null;
   abstract_inverted_index?: unknown;
+  cited_by_count?: number | null;
+  is_retracted?: boolean | null;
 }
 
 interface OpenAlexResponse {
@@ -115,6 +120,7 @@ export function mapOpenAlexWork(raw: unknown, keyword: string, retrievedAt: stri
       oaUrl: safeHttpUrl(best?.landing_page_url) || oaUrl,
       oaLicense: best?.license ?? '',
     }),
+    ...recordSignals({ citedBy: work.cited_by_count, retracted: work.is_retracted, issns: location?.source?.issn ?? location?.source?.issn_l ?? undefined }),
     sources: ['openalex'],
     sourceRefs: workId ? [{ source: 'openalex', sourceId: workId, url: safeHttpUrl(workId) }] : [],
     originalUrl: safeHttpUrl(location?.landing_page_url) || (doi ? doiUrl(doi) : safeHttpUrl(workId)),
@@ -193,6 +199,20 @@ export class OpenAlexAdapter implements SourceAdapter {
       return { records };
     } catch (error) {
       return { records, error: toUpstreamError(error) };
+    }
+  }
+
+  /** Tra một DOI qua /works/doi:{doi}. */
+  async lookupDoi(doi: string, signal?: AbortSignal): Promise<PaperRecord | null> {
+    const url = `${this.baseUrl}/works/doi:${doi.split('/').map(encodeURIComponent).join('/')}?select=${SELECT}`;
+    try {
+      const data = await this.options.http.getJson<unknown>(url, { source: this.label, limiter: this.options.limiter, signal, headers: this.headers() });
+      const record = mapOpenAlexWork(data, '', this.now().toISOString());
+      if (record) record.queryKeywords = [];
+      return record;
+    } catch (error) {
+      if (error instanceof UpstreamError && error.status === 404) return null;
+      throw error;
     }
   }
 

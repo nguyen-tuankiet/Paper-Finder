@@ -28,4 +28,6 @@ export interface SourceAdapter {
   search(params: AdapterSearchParams): Promise<AdapterResult>;
   /** Kiểm tra nhanh nguồn còn hoạt động; ném UpstreamError nếu lỗi. */
   ping(signal?: AbortSignal): Promise<void>;
+  /** Tra một DOI. Trả null nếu nguồn không có DOI đó; ném UpstreamError nếu lỗi khác. Chỉ một số nguồn hỗ trợ. */
+  lookupDoi?(doi: string, signal?: AbortSignal): Promise<PaperRecord | null>;
 }

@@ -25,6 +25,9 @@ export interface ExportRecord {
   issue?: string;
   pages?: string;
   place?: string;
+  citedByCount?: number;
+  isRetracted?: boolean;
+  journalQuartile?: string;
 }
 
 export const EXPORT_COLUMNS = [
@@ -42,6 +45,9 @@ export const EXPORT_COLUMNS = [
   'Search Keyword',
   'Open Access URL',
   'License',
+  'Cited By',
+  'Retracted',
+  'Journal Quartile',
 ] as const;
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -80,6 +86,9 @@ function rowValues(record: ExportRecord, index: number): (string | number)[] {
     record.queryKeywords.join('; '),
     openAccessUrl(record),
     record.oaLicense ? formatLicense(record.oaLicense) : '',
+    record.citedByCount ?? '',
+    record.isRetracted ? 'RETRACTED' : '',
+    record.journalQuartile ?? '',
   ];
 }
 
@@ -139,6 +148,9 @@ export async function toXlsx(records: ExportRecord[], generatedAt: Date = new Da
     { header: EXPORT_COLUMNS[11], width: 30 },
     { header: EXPORT_COLUMNS[12], width: 40 },
     { header: EXPORT_COLUMNS[13], width: 14 },
+    { header: EXPORT_COLUMNS[14], width: 10 },
+    { header: EXPORT_COLUMNS[15], width: 12 },
+    { header: EXPORT_COLUMNS[16], width: 12 },
   ];
 
   const header = sheet.getRow(1);
@@ -263,6 +275,7 @@ export function toBibtex(records: ExportRecord[]): Buffer {
     add('doi', record.doi);
     add('url', record.doi ? '' : record.originalUrl);
     add('abstract', record.abstract);
+    if (record.isRetracted) add('note', 'Retracted publication (bài đã bị rút lại)');
     const body = fields.map(([name, value]) => `  ${name} = {${value}}`).join(',\n');
     return `@${type}{${keys[index]},\n${body}\n}`;
   });
@@ -298,6 +311,7 @@ export function toRis(records: ExportRecord[]): Buffer {
     add('DO', record.doi);
     add('UR', record.doi ? doiUrl(record.doi) : record.originalUrl);
     add('AB', record.abstract);
+    if (record.isRetracted) add('N1', 'Retracted publication (bài đã bị rút lại)');
     lines.push('ER  - ', '');
   }
   return Buffer.from(lines.join('\r\n') + '\r\n', 'utf8');

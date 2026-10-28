@@ -93,6 +93,16 @@ export function mergeRecords(members: PaperRecord[]): PaperRecord {
   base.oaLicense = openMembers.find((m) => m.oaLicense)?.oaLicense ?? '';
   base.oaStatus = (openMembers.find((m) => m.oaStatus) ?? base).oaStatus;
 
+  // Tín hiệu bổ sung: số trích dẫn lấy lớn nhất (mỗi nguồn đếm khác nhau), đã rút lại nếu BẤT KỲ nguồn nào báo (cảnh báo an toàn), ISSN gộp lại.
+  const counts = members.map((m) => m.citedByCount).filter((n): n is number => typeof n === 'number');
+  if (counts.length > 0) base.citedByCount = Math.max(...counts);
+  else delete base.citedByCount;
+  if (members.some((m) => m.isRetracted)) base.isRetracted = true;
+  else delete base.isRetracted;
+  const issns = [...new Set(members.flatMap((m) => m.issn ?? []))];
+  if (issns.length > 0) base.issn = issns;
+  else delete base.issn;
+
   base.sources = [...new Set(members.flatMap((m) => m.sources))];
   base.queryKeywords = [...new Set(members.flatMap((m) => m.queryKeywords))];
   const refs = new Map<string, PaperRecord['sourceRefs'][number]>();

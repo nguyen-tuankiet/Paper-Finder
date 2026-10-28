@@ -1,9 +1,10 @@
-import { BookOutlined, CopyOutlined, EyeOutlined, LinkOutlined, ReadOutlined } from '@ant-design/icons';
-import { Button, Input, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd';
+import { BookOutlined, CopyOutlined, EyeOutlined, LinkOutlined, LockOutlined, ReadOutlined, WarningOutlined } from '@ant-design/icons';
+import { Button, Checkbox, InputNumber, Input, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import type { SorterResult } from 'antd/es/table/interface';
 import { useMemo, useState } from 'react';
 import { SOURCE_IDS, type PaperRecord } from '../../../shared/types';
+import { useAccount } from '../lib/accountContext';
 import { copyText } from '../lib/clipboard';
 import { formatReferenceList, type CitationStyle } from '../lib/citation';
 import type { CustomCitationConfig } from '../lib/customCitation';
@@ -19,9 +20,12 @@ import {
   doiUrl,
   formatLicense,
   publisherUrl,
+  sortByCitations,
   sortByYear,
   type ResultFilters,
 } from '../lib/records';
+
+const QUARTILE_COLOR: Record<NonNullable<PaperRecord['journalQuartile']>, string> = { Q1: 'green', Q2: 'blue', Q3: 'orange', Q4: 'default' };
 
 interface Props {
   allRecords: PaperRecord[];
@@ -82,11 +86,19 @@ export function AccessCell({ record }: { record: PaperRecord }) {
 
 export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, selectedIds, onSelectionChange, onShowDetail, citationStyle, onCitationStyleChange, customCitation, onCustomCitationChange }: Props) {
   const [yearOrder, setYearOrder] = useState<'ascend' | 'descend' | null>(null);
+  const [citeOrder, setCiteOrder] = useState<'ascend' | 'descend' | null>(null);
+  const account = useAccount();
+  /** Sắp xếp/lọc theo trích dẫn là tính năng từ hạng Tiêu chuẩn (chỉ khóa khi máy chủ bật tài khoản). */
+  const citeLocked = account.enabled && !account.entitlements.citationTools;
+  const hasCitations = useMemo(() => allRecords.some((r) => r.citedByCount !== undefined), [allRecords]);
+  const hasQuartiles = useMemo(() => allRecords.some((r) => r.journalQuartile), [allRecords]);
+  const retractedCount = useMemo(() => allRecords.filter((r) => r.isRetracted).length, [allRecords]);
+  const unlockCitations = () => (account.user ? account.openUpgrade('Sắp xếp và lọc theo số trích dẫn dành cho hạng Tiêu chuẩn trở lên.', 'standard') : account.openAuth('register'));
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [messageApi, contextHolder] = message.useMessage();
 
-  const data = useMemo(() => sortByYear(filtered, yearOrder), [filtered, yearOrder]);
+  const data = useMemo(() => (citeOrder ? sortByCitations(filtered, citeOrder) : sortByYear(filtered, yearOrder)), [filtered, yearOrder, citeOrder]);
   const presentSources = useMemo(() => SOURCE_IDS.filter((s) => allRecords.some((r) => r.sources.includes(s))), [allRecords]);
   const types = useMemo(() => [...new Set(allRecords.map((r) => r.documentType).filter(Boolean))].sort(), [allRecords]);
 
@@ -133,6 +145,13 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
             <Tooltip title={title} mouseEnterDelay={0.6} placement="topLeft">
               <div className="pf-clamp pf-clamp-3">{content}</div>
             </Tooltip>
+            {record.isRetracted && (
+              <Tooltip title="Bài này đã bị rút lại theo Crossref/Retraction Watch hoặc OpenAlex. Không nên trích dẫn như một nguồn đáng tin cậy.">
+                <Tag color="red" icon={<WarningOutlined />} style={{ marginTop: 4 }}>
+                  Đã bị rút lại
+                </Tag>
+              </Tooltip>
+            )}
             {record.isPreprint && (
               <Tag color="orange" style={{ marginTop: 4 }}>
                 Preprint
@@ -190,14 +209,42 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
       render: (year: number | null) => year ?? muted('—'),
     },
     {
+      title: citeLocked ? (
+        <Tooltip title="Sắp xếp theo trích dẫn: hạng Tiêu chuẩn trở lên">
+          <span onClick={unlockCitations} style={{ cursor: 'pointer' }}>
+            Trích dẫn <LockOutlined />
+          </span>
+        </Tooltip>
+      ) : (
+        <Tooltip title="Số lượt trích dẫn lớn nhất do các nguồn báo (mỗi nguồn đếm khác nhau nên con số có thể lệch so với Google Scholar).">Trích dẫn</Tooltip>
+      ),
+      key: 'citations',
+      dataIndex: 'citedByCount',
+      width: 104,
+      align: 'center',
+      sorter: citeLocked ? false : true,
+      sortOrder: citeOrder,
+      sortDirections: ['descend', 'ascend'],
+      render: (count: number | undefined) => (count === undefined ? muted('—') : new Intl.NumberFormat('vi-VN').format(count)),
+    },
+    {
       title: 'Tạp chí / hội nghị',
       key: 'journal',
       width: 220,
       render: (_value, record) =>
         record.journal ? (
-          <Tooltip title={record.journal} mouseEnterDelay={0.6}>
-            <div className="pf-clamp pf-clamp-2">{record.journal}</div>
-          </Tooltip>
+          <div>
+            <Tooltip title={record.journal} mouseEnterDelay={0.6}>
+              <div className="pf-clamp pf-clamp-2">{record.journal}</div>
+            </Tooltip>
+            {record.journalQuartile && (
+              <Tooltip title={`Xếp hạng phần tư SJR của tạp chí${record.journalSjr ? ` (SJR ${record.journalSjr.toFixed(2)})` : ''}, theo SCImago. Q1 là nhóm cao nhất. Hạng thay đổi theo năm.`}>
+                <Tag color={QUARTILE_COLOR[record.journalQuartile]} style={{ marginTop: 4 }}>
+                  {record.journalQuartile}
+                </Tag>
+              </Tooltip>
+            )}
+          </div>
         ) : (
           muted(NO_DATA)
         ),
@@ -245,7 +292,10 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
     setPage(pagination.current ?? 1);
     setPageSize(pagination.pageSize ?? 20);
     const single = Array.isArray(sorter) ? sorter[0] : sorter;
-    setYearOrder((single?.order as 'ascend' | 'descend' | undefined) ?? null);
+    const order = (single?.order as 'ascend' | 'descend' | undefined) ?? null;
+    // Chỉ một cột được sắp xếp tại một thời điểm.
+    setYearOrder(single?.columnKey === 'citations' ? null : order);
+    setCiteOrder(single?.columnKey === 'citations' ? order : null);
   };
 
   const set = (patch: Partial<ResultFilters>) => {
@@ -306,6 +356,39 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
             aria-label="Lọc theo loại tài liệu"
           />
         )}
+        {hasCitations &&
+          (citeLocked ? (
+            <Button icon={<LockOutlined />} onClick={unlockCitations}>
+              Lọc theo trích dẫn
+            </Button>
+          ) : (
+            <InputNumber
+              min={0}
+              value={filters.minCited}
+              onChange={(value) => set({ minCited: value === null ? null : Math.max(0, Math.floor(value)) })}
+              placeholder="Trích dẫn tối thiểu"
+              style={{ width: 170 }}
+              aria-label="Lọc theo số trích dẫn tối thiểu"
+            />
+          ))}
+        {hasQuartiles && (
+          <Select
+            value={filters.quartile}
+            onChange={(quartile) => set({ quartile })}
+            options={[
+              { value: 'all', label: 'Mọi hạng tạp chí' },
+              { value: 'q1', label: 'Tạp chí Q1' },
+              { value: 'q12', label: 'Tạp chí Q1–Q2' },
+            ]}
+            style={{ minWidth: 150 }}
+            aria-label="Lọc theo hạng tạp chí"
+          />
+        )}
+        {retractedCount > 0 && (
+          <Checkbox checked={filters.hideRetracted} onChange={(e) => set({ hideRetracted: e.target.checked })}>
+            Ẩn bài đã rút lại ({retractedCount})
+          </Checkbox>
+        )}
       </div>
 
       <div className="pf-selection-bar">
@@ -340,7 +423,7 @@ export function ResultsTable({ allRecords, filtered, filters, onFiltersChange, s
         columns={columns}
         dataSource={data}
         onChange={handleChange}
-        scroll={{ x: 1460 }}
+        scroll={{ x: 1570 }}
         sticky
         locale={{ emptyText: 'Không có bài báo nào khớp bộ lọc hiện tại.' }}
         pagination={{ current: page, pageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `${total} bài` }}

@@ -3,6 +3,7 @@ import { doiUrl, normalizeDoi } from '../lib/doi.js';
 import { UpstreamError, toUpstreamError } from '../lib/errors.js';
 import { openAccess } from '../lib/oa.js';
 import { biblio } from '../lib/biblio.js';
+import { recordSignals } from '../lib/signals.js';
 import type { HttpClient } from '../lib/http.js';
 import type { Limiter } from '../lib/limiter.js';
 import { cleanAbstract, cleanText } from '../lib/text.js';
@@ -25,7 +26,8 @@ interface EpmcResult {
   title?: string;
   authorString?: string;
   authorList?: { author?: EpmcAuthor[] };
-  journalInfo?: { journal?: { title?: string }; yearOfPublication?: number; volume?: string; issue?: string };
+  journalInfo?: { journal?: { title?: string; issn?: string; essn?: string }; yearOfPublication?: number; volume?: string; issue?: string };
+  citedByCount?: number;
   pageInfo?: string;
   bookOrReportDetails?: { publisher?: string };
   pubYear?: string;
@@ -106,6 +108,7 @@ export function mapEuropePmcResult(raw: unknown, keyword: string, retrievedAt: s
     abstract: cleanAbstract(result.abstractText),
     ...biblio({ volume: result.journalInfo?.volume, issue: result.journalInfo?.issue, pages: result.pageInfo }),
     ...europePmcOpenAccess(result),
+    ...recordSignals({ citedBy: result.citedByCount, issns: [result.journalInfo?.journal?.issn, result.journalInfo?.journal?.essn].filter(Boolean) }),
     sources: ['europepmc'],
     sourceRefs: [{ source: 'europepmc', sourceId: `${result.source}:${result.id}`, url }],
     originalUrl: url,

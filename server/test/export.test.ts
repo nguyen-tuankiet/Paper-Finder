@@ -54,7 +54,7 @@ describe('CSV', () => {
     expect([...buffer.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
     const rows = parseCsv(buffer.toString('utf8').slice(1));
     expect(rows[0]).toEqual([...EXPORT_COLUMNS]);
-    expect(rows[0]).toEqual(['STT', 'Title', 'DOI', 'Authors', 'Publication Year', 'Journal', 'Publisher', 'Document Type', 'Abstract', 'Source', 'Original URL', 'Search Keyword', 'Open Access URL', 'License']);
+    expect(rows[0]).toEqual(['STT', 'Title', 'DOI', 'Authors', 'Publication Year', 'Journal', 'Publisher', 'Document Type', 'Abstract', 'Source', 'Original URL', 'Search Keyword', 'Open Access URL', 'License', 'Cited By', 'Retracted', 'Journal Quartile']);
   });
 
   it('cột Open Access URL ưu tiên PDF, License được định dạng; bài không mở thì để trống', () => {
@@ -62,9 +62,9 @@ describe('CSV', () => {
     const pageOnly = exportRecord(2, { oaUrl: 'https://x.org/page', oaLicense: 'cc by' });
     const closed = exportRecord(3);
     const rows = parseCsv(toCsv([open, pageOnly, closed]).toString('utf8').slice(1));
-    expect(rows[1]!.slice(12)).toEqual(['https://x.org/a.pdf', 'CC BY-NC-ND']);
-    expect(rows[2]!.slice(12)).toEqual(['https://x.org/page', 'CC BY']);
-    expect(rows[3]!.slice(12)).toEqual(['', '']);
+    expect(rows[1]!.slice(12, 14)).toEqual(['https://x.org/a.pdf', 'CC BY-NC-ND']);
+    expect(rows[2]!.slice(12, 14)).toEqual(['https://x.org/page', 'CC BY']);
+    expect(rows[3]!.slice(12, 14)).toEqual(['', '']);
   });
 
   it('giữ nguyên ký tự tiếng Việt, tác giả/nguồn/từ khóa phân cách bằng dấu chấm phẩy', () => {
@@ -84,6 +84,9 @@ describe('CSV', () => {
       'trí tuệ nhân tạo; machine learning',
       '', // Open Access URL: bài này không có bản mở
       '', // License
+      '', // Cited By
+      '', // Retracted
+      '', // Journal Quartile
     ]);
   });
 
@@ -139,7 +142,7 @@ describe('XLSX', () => {
     expect(sheet.views[0]).toMatchObject({ state: 'frozen', ySplit: 1 });
   });
 
-  it('Open Access URL là hyperlink, License hiển thị; đủ 14 cột', async () => {
+  it('Open Access URL là hyperlink, License hiển thị; đủ 17 cột', async () => {
     const sheet = (await load(await toXlsx([exportRecord(1, { oaPdfUrl: 'https://x.org/a.pdf', oaLicense: 'cc-by' })]))).worksheets[0]!;
     expect(sheet.getRow(1).values).toEqual([undefined, ...EXPORT_COLUMNS]);
     expect(sheet.getCell('M2').value).toMatchObject({ text: 'https://x.org/a.pdf', hyperlink: 'https://x.org/a.pdf' });
