@@ -4,7 +4,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { MeResponse, PaidTier, PlanPeriod, PlansResponse } from '../../shared/types.js';
 import { createAccountsContext, type AccountsContext } from '../src/accounts/context.js';
 import { MemoryAccountStore } from '../src/accounts/memoryStore.js';
-import { PayOsClient } from '../src/accounts/payos.js';
 import { createApp } from '../src/app.js';
 import { UpstreamError } from '../src/lib/errors.js';
 import { silentLogger } from '../src/logger.js';
@@ -29,34 +28,11 @@ const crossref: SourceAdapter = {
 };
 const adapters: AdapterMap = { crossref };
 
-/** PayOS giả: lưu trạng thái từng đơn để kiểm tra luồng kích hoạt. */
-class FakePayOs {
-  orders = new Map<number, { status: string; amountPaid: number; amount: number; description: string }>();
-  fetch = async (url: string, init?: RequestInit): Promise<Response> => {
-    const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
-    if (url.endsWith('/v2/payment-requests') && init?.method === 'POST') {
-      const body = JSON.parse(String(init.body)) as { orderCode: number; amount: number; signature: string; description: string };
-      expect(body.description.length).toBeLessThanOrEqual(25);
-      expect(body.signature).toMatch(/^[0-9a-f]{64}$/);
-      this.orders.set(body.orderCode, { status: 'PENDING', amountPaid: 0, amount: body.amount, description: body.description });
-      return json({ code: '00', desc: 'success', data: { checkoutUrl: `https://pay.payos.vn/web/${body.orderCode}` } });
-    }
-    const match = /\/v2\/payment-requests\/(\d+)$/.exec(url);
-    const order = match ? this.orders.get(Number(match[1])) : undefined;
-    if (!order) return json({ code: '101', desc: 'not found', data: null }, 404);
-    return json({ code: '00', desc: 'success', data: { status: order.status, amount: order.amount, amountPaid: order.amountPaid } });
-  };
-  pay(orderCode: number, amountPaid?: number) {
-    const o = this.orders.get(orderCode)!;
-    o.status = 'PAID';
-    o.amountPaid = amountPaid ?? o.amount;
-  }
-}
+const SEPAY = { apiKey: 'test-sepay-key-12345', accountNumber: '0123456789', bankName: 'MBBank', accountName: 'NGUYEN VAN TEST', codePrefix: 'PF' };
 
 let server: Server;
 let base: string;
 let ctx: AccountsContext;
-let payos: FakePayOs;
 let store: MemoryAccountStore;
 
 function makeContext(now?: () => Date): AccountsContext {
@@ -68,12 +44,12 @@ function makeContext(now?: () => Date): AccountsContext {
     timezone: 'Asia/Ho_Chi_Minh',
     rateLimits: { registerPerHour: 10_000, loginFailuresPer15Min: 10_000 },
     now,
-    billing: { payos: new PayOsClient({ clientId: 'id', apiKey: 'key', checksumKey: 'sum' }, payos.fetch), publicBaseUrl: 'https://paperfinder.example', prices: PRICES },
+    billing: { sepay: SEPAY, prices: PRICES },
   });
 }
 
-async function startServer(accounts: AccountsContext | undefined): Promise<{ server: Server; base: string }> {
-  const app = createApp({ adapters, accounts, config: { corsOrigins: [], rateLimitPerMinute: 10_000, staticDir: undefined, adminPassword: ADMIN }, logger: silentLogger });
+async function startServer(accounts: AccountsContext | undefined, sepay?: typeof SEPAY): Promise<{ server: Server; base: string }> {
+  const app = createApp({ adapters, accounts, config: { corsOrigins: [], rateLimitPerMinute: 10_000, staticDir: undefined, adminPassword: ADMIN, sepay }, logger: silentLogger });
   const s = await new Promise<Server>((resolve) => {
     const listening = app.listen(0, () => resolve(listening));
   });
@@ -81,10 +57,9 @@ async function startServer(accounts: AccountsContext | undefined): Promise<{ ser
 }
 
 beforeAll(async () => {
-  payos = new FakePayOs();
   store = new MemoryAccountStore();
   ctx = makeContext();
-  ({ server, base } = await startServer(ctx));
+  ({ server, base } = await startServer(ctx, SEPAY));
 });
 
 afterAll(() => {
@@ -143,6 +118,18 @@ const me = (cookie?: string) => call<MeResponse>('GET', '/api/me', undefined, co
 const exportRecord = (i: number) => ({ title: `Paper ${i}`, doi: `10.1/${i}`, authors: [{ name: 'A B' }], publicationYear: 2020, journal: 'J', publisher: '', documentType: 'journal-article', abstract: '', sources: ['crossref'], originalUrl: '', queryKeywords: [] });
 const exportRecords = (n: number) => Array.from({ length: n }, (_, i) => exportRecord(i));
 const exportCall = (format: string, n: number, cookie?: string) => call('POST', '/api/export', { format, records: exportRecords(n) }, cookie);
+
+async function buyAndPay(cookie: string, tier: PaidTier, period: PlanPeriod): Promise<number> {
+  const checkout = (await call<Checkout>('POST', '/api/billing/checkout', { tier, period }, cookie)).body;
+  await webhook(incoming(checkout));
+  const confirm = await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode: checkout.orderCode }, cookie);
+  expect(confirm.body.status).toBe('paid');
+  return checkout.orderCode;
+}
+
+function makeContextWithoutSepay(): AccountsContext {
+  return createAccountsContext({ store, sessionSecret: SECRET, freeDailySearches: 3, guestDailySearches: 2, timezone: 'Asia/Ho_Chi_Minh', rateLimits: { registerPerHour: 10_000, loginFailuresPer15Min: 10_000 }, billing: { prices: PRICES } });
+}
 
 describe('đăng ký và đăng nhập', () => {
   it('đăng ký tự đăng nhập ngay: cookie phiên có sẵn và /api/me nhận ra người dùng', async () => {
@@ -472,12 +459,44 @@ describe('thư viện và lịch sử theo hạng', () => {
   });
 });
 
-describe('thanh toán PayOS', () => {
+interface Checkout {
+  orderCode: number;
+  amount: number;
+  memo: string;
+  bankName: string;
+  accountNumber: string;
+  accountName?: string;
+  qrUrl: string;
+  expiresAt: string;
+}
+
+let txCounter = 1000;
+/** Giả lập SePay gọi webhook khi có tiền vào tài khoản. */
+const webhook = (body: Record<string, unknown>, key: string | null = SEPAY.apiKey) =>
+  call<{ success?: boolean }>('POST', '/api/billing/sepay-webhook', body, undefined, key === null ? {} : { authorization: `Apikey ${key}` });
+const incoming = (checkout: Checkout, over: Record<string, unknown> = {}) => ({
+  id: ++txCounter,
+  gateway: 'MBBank',
+  transactionDate: '2026-10-29 10:00:00',
+  accountNumber: SEPAY.accountNumber,
+  code: null,
+  content: `${checkout.memo} chuyen tien mua goi`,
+  transferType: 'in',
+  transferAmount: checkout.amount,
+  accumulated: 1_000_000,
+  subAccount: null,
+  referenceCode: `FT${txCounter}`,
+  description: `BankAPINotify ${checkout.memo}`,
+  ...over,
+});
+const daysLeft = (iso: string | null) => (new Date(iso!).getTime() - Date.now()) / 86_400_000;
+const periodDays: Record<PlanPeriod, number> = { week: 7, month: 30, year: 365 };
+
+describe('thanh toán chuyển khoản qua SePay', () => {
   it('/api/plans trả bốn hạng và sáu gói (hạng trả phí × 7 ngày/1 tháng/1 năm)', async () => {
     const plans = await call<PlansResponse>('GET', '/api/plans');
     expect(plans.body).toMatchObject({ accountsEnabled: true, billingEnabled: true });
     expect(plans.body.tiers.map((t) => t.tier)).toEqual(['guest', 'free', 'standard', 'pro']);
-    expect(plans.body.tiers[0]).toMatchObject({ dailySearches: 2, maxResultsPerSource: 20, exportRows: 0 });
     expect(plans.body.plans).toHaveLength(6);
     expect(plans.body.plans.filter((p) => p.tier === 'pro').map((p) => [p.period, p.days, p.priceVnd])).toEqual([
       ['week', 7, 29_000],
@@ -486,7 +505,7 @@ describe('thanh toán PayOS', () => {
     ]);
   });
 
-  it('phải đăng nhập và chọn gói hợp lệ mới tạo được link thanh toán', async () => {
+  it('phải đăng nhập và chọn gói hợp lệ mới tạo được đơn', async () => {
     expect((await call('POST', '/api/billing/checkout', { tier: 'pro', period: 'month' })).status).toBe(401);
     const { cookie } = await newUser();
     expect((await call('POST', '/api/billing/checkout', { tier: 'free', period: 'month' }, cookie)).status).toBe(400);
@@ -494,18 +513,28 @@ describe('thanh toán PayOS', () => {
     expect((await call('POST', '/api/billing/checkout', { tier: 'pro' }, cookie)).status).toBe(400);
   });
 
-  const periodDays: Record<PlanPeriod, number> = { week: 7, month: 30, year: 365 };
-  const daysLeft = (iso: string | null) => (new Date(iso!).getTime() - Date.now()) / 86_400_000;
+  it('đơn trả về hướng dẫn chuyển khoản: số tiền, nội dung, tài khoản và mã QR', async () => {
+    const { cookie } = await newUser();
+    const r = await call<Checkout>('POST', '/api/billing/checkout', { tier: 'pro', period: 'month' }, cookie);
+    expect(r.status).toBe(200);
+    expect(r.body.orderCode).toBeGreaterThanOrEqual(100_000_000);
+    expect(r.body.orderCode).toBeLessThan(1_000_000_000);
+    expect(r.body).toMatchObject({ amount: PRICES['pro:month'], memo: `PF${r.body.orderCode}`, bankName: 'MBBank', accountNumber: '0123456789', accountName: 'NGUYEN VAN TEST' });
+    const qr = new URL(r.body.qrUrl);
+    expect(qr.origin + qr.pathname).toBe('https://qr.sepay.vn/img');
+    expect(qr.searchParams.get('acc')).toBe('0123456789');
+    expect(qr.searchParams.get('bank')).toBe('MBBank');
+    expect(qr.searchParams.get('amount')).toBe(String(PRICES['pro:month']));
+    expect(qr.searchParams.get('des')).toBe(r.body.memo);
+    expect(new Date(r.body.expiresAt).getTime()).toBeGreaterThan(Date.now());
+  });
 
-  async function buy(cookie: string, tier: PaidTier, period: PlanPeriod) {
-    const checkout = await call<{ checkoutUrl: string; orderCode: number }>('POST', '/api/billing/checkout', { tier, period }, cookie);
-    expect(checkout.status).toBe(200);
-    expect(checkout.body.checkoutUrl).toMatch(/^https:\/\/pay\.payos\.vn\//);
-    payos.pay(checkout.body.orderCode);
-    const confirm = await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode: checkout.body.orderCode }, cookie);
-    expect(confirm.body.status).toBe('paid');
-    return checkout.body.orderCode;
-  }
+  it('mỗi đơn có mã khác nhau', async () => {
+    const { cookie } = await newUser();
+    const codes = new Set<number>();
+    for (let i = 0; i < 12; i++) codes.add((await call<Checkout>('POST', '/api/billing/checkout', { tier: 'standard', period: 'week' }, cookie)).body.orderCode);
+    expect(codes.size).toBe(12);
+  });
 
   it.each([
     ['standard', 'week'],
@@ -514,105 +543,150 @@ describe('thanh toán PayOS', () => {
     ['pro', 'week'],
     ['pro', 'month'],
     ['pro', 'year'],
-  ] as const)('mua %s %s: đúng hạng, đúng số ngày, đúng số tiền', async (tier, period) => {
+  ] as const)('mua %s %s: tiền về đủ thì kích hoạt đúng hạng và số ngày', async (tier, period) => {
     const { email, cookie } = await newUser();
-    const checkout = await call<{ orderCode: number }>('POST', '/api/billing/checkout', { tier, period }, cookie);
-    const order = payos.orders.get(checkout.body.orderCode)!;
-    expect(order.amount).toBe(PRICES[`${tier}:${period}` as keyof typeof PRICES]);
-    expect(order.description.length).toBeLessThanOrEqual(25);
+    const checkout = (await call<Checkout>('POST', '/api/billing/checkout', { tier, period }, cookie)).body;
+    expect(checkout.amount).toBe(PRICES[`${tier}:${period}` as keyof typeof PRICES]);
 
-    expect((await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode: checkout.body.orderCode }, cookie)).body.status).toBe('pending');
+    expect((await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode: checkout.orderCode }, cookie)).body.status).toBe('pending');
     expect((await me(cookie)).body.tier).toBe('free');
 
-    payos.pay(checkout.body.orderCode);
-    const confirm = await call<{ status: string; user: { tier: string } }>('POST', '/api/billing/confirm', { orderCode: checkout.body.orderCode }, cookie);
+    const hook = await webhook(incoming(checkout));
+    expect(hook).toMatchObject({ status: 200, body: { success: true } });
+    const confirm = await call<{ status: string; user: { tier: string } }>('POST', '/api/billing/confirm', { orderCode: checkout.orderCode }, cookie);
     expect(confirm.body).toMatchObject({ status: 'paid', user: { tier } });
 
     const user = (await store.getUserByEmail(email))!;
-    expect(daysLeft(tier === 'pro' ? user.proUntil : user.standardUntil)).toBeGreaterThan(periodDays[period] - 0.1);
-    expect(daysLeft(tier === 'pro' ? user.proUntil : user.standardUntil)).toBeLessThan(periodDays[period] + 0.1);
+    const left = daysLeft(tier === 'pro' ? user.proUntil : user.standardUntil);
+    expect(left).toBeGreaterThan(periodDays[period] - 0.1);
+    expect(left).toBeLessThan(periodDays[period] + 0.1);
     expect((await me(cookie)).body.tier).toBe(tier);
+    expect((await store.getOrder(checkout.orderCode))?.paymentRef).toMatch(/^sepay:\d+$/);
   });
 
-  it('webhook và trang quay lại gọi cùng lúc: chỉ cộng thời hạn một lần', async () => {
+  it('webhook sai khóa hoặc thiếu khóa bị từ chối và không kích hoạt gì', async () => {
     const { email, cookie } = await newUser();
-    const checkout = await call<{ orderCode: number }>('POST', '/api/billing/checkout', { tier: 'pro', period: 'month' }, cookie);
-    const { orderCode } = checkout.body;
-    payos.pay(orderCode);
-    const [hook, confirm] = await Promise.all([
-      call('POST', '/api/billing/payos-webhook', { code: '00', success: true, data: { orderCode, amount: 1 } }),
-      call<{ status: string }>('POST', '/api/billing/confirm', { orderCode }, cookie),
-    ]);
-    expect(hook.status).toBe(200);
-    expect(confirm.body.status).toBe('paid');
+    const checkout = (await call<Checkout>('POST', '/api/billing/checkout', { tier: 'pro', period: 'week' }, cookie)).body;
+    expect((await webhook(incoming(checkout), null)).status).toBe(401);
+    expect((await webhook(incoming(checkout), 'sai-khoa')).status).toBe(401);
+    expect((await call('POST', '/api/billing/sepay-webhook', incoming(checkout), undefined, { authorization: `Bearer ${SEPAY.apiKey}` })).status).toBe(401);
+    expect((await store.getUserByEmail(email))!.proUntil).toBeNull();
+  });
+
+  it('SePay gửi lặp cùng giao dịch hoặc hai giao dịch cho một đơn: chỉ cộng thời hạn một lần', async () => {
+    const { email, cookie } = await newUser();
+    const checkout = (await call<Checkout>('POST', '/api/billing/checkout', { tier: 'pro', period: 'month' }, cookie)).body;
+    const tx = incoming(checkout);
+    const results = await Promise.all([webhook(tx), webhook(tx), webhook(incoming(checkout)), webhook(tx)]);
+    expect(results.every((r) => r.status === 200)).toBe(true);
     const first = (await store.getUserByEmail(email))!.proUntil;
-    await call('POST', '/api/billing/confirm', { orderCode }, cookie);
-    await call('POST', '/api/billing/payos-webhook', { data: { orderCode } });
+    expect(daysLeft(first)).toBeCloseTo(30, 0);
+    await webhook(tx);
     expect((await store.getUserByEmail(email))!.proUntil).toBe(first);
+  });
+
+  it('chuyển thiếu tiền thì chưa kích hoạt; bù đủ sau đó thì kích hoạt', async () => {
+    const { email, cookie } = await newUser();
+    const checkout = (await call<Checkout>('POST', '/api/billing/checkout', { tier: 'standard', period: 'month' }, cookie)).body;
+    expect((await webhook(incoming(checkout, { transferAmount: checkout.amount - 1 }))).body.success).toBe(true);
+    expect((await store.getUserByEmail(email))!.standardUntil).toBeNull();
+    expect((await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode: checkout.orderCode }, cookie)).body.status).toBe('pending');
+    await webhook(incoming(checkout));
+    expect((await store.getUserByEmail(email))!.standardUntil).not.toBeNull();
+  });
+
+  it('chuyển dư tiền vẫn kích hoạt', async () => {
+    const { email, cookie } = await newUser();
+    const checkout = (await call<Checkout>('POST', '/api/billing/checkout', { tier: 'standard', period: 'week' }, cookie)).body;
+    await webhook(incoming(checkout, { transferAmount: checkout.amount + 50_000 }));
+    expect((await store.getUserByEmail(email))!.standardUntil).not.toBeNull();
+  });
+
+  it('tiền vào tài khoản khác, tiền ra, hoặc nội dung không có mã đơn thì không kích hoạt', async () => {
+    const { email, cookie } = await newUser();
+    const checkout = (await call<Checkout>('POST', '/api/billing/checkout', { tier: 'pro', period: 'week' }, cookie)).body;
+    await webhook(incoming(checkout, { accountNumber: '9999999999' }));
+    await webhook(incoming(checkout, { transferType: 'out' }));
+    await webhook(incoming(checkout, { content: 'chuyen tien linh tinh', description: '' }));
+    await webhook(incoming(checkout, { content: 'PF000000001 ma khac', description: '' }));
+    expect((await store.getUserByEmail(email))!.proUntil).toBeNull();
+    // Các trường hợp trên đều trả 200 để SePay không thử lại vô ích.
+    expect((await webhook(incoming(checkout, { content: 'khong co ma', description: '' }))).status).toBe(200);
+  });
+
+  it('nhận mã đơn dù ngân hàng đổi hoa/thường, chèn khoảng trắng, hoặc SePay đã tách sẵn vào trường code', async () => {
+    const cases: ((c: Checkout) => Record<string, unknown>)[] = [
+      (c) => ({ content: `thanh toan ${c.memo.toLowerCase()} cam on`, description: '' }),
+      (c) => ({ content: `PF ${c.orderCode}`, description: '' }),
+      (c) => ({ content: 'MBVCB.123 chuyen tien', description: '', code: c.memo }),
+    ];
+    for (const make of cases) {
+      const { email, cookie } = await newUser();
+      const checkout = (await call<Checkout>('POST', '/api/billing/checkout', { tier: 'standard', period: 'week' }, cookie)).body;
+      await webhook(incoming(checkout, make(checkout)));
+      expect((await store.getUserByEmail(email))!.standardUntil).not.toBeNull();
+    }
+  });
+
+  it('payload sai định dạng bị từ chối rõ ràng', async () => {
+    expect((await webhook({})).status).toBe(400);
+    expect((await webhook({ id: 1, transferType: 'in' })).status).toBe(400);
+    expect((await webhook({ id: 1, transferType: 'in', transferAmount: 'abc', content: 'PF123456789' })).status).toBe(400);
+    expect((await webhook({ id: 1, transferType: 'lung tung', transferAmount: 1000 })).status).toBe(400);
   });
 
   it('mua tiếp cùng hạng thì cộng dồn', async () => {
     const { email, cookie } = await newUser();
-    await buy(cookie, 'standard', 'month');
-    await buy(cookie, 'standard', 'month');
+    await buyAndPay(cookie, 'standard', 'month');
+    await buyAndPay(cookie, 'standard', 'month');
     expect(daysLeft((await store.getUserByEmail(email))!.standardUntil)).toBeGreaterThan(59.9);
   });
 
   it('đang có Tiêu chuẩn mua thêm Pro: Pro có hiệu lực ngay, thời gian Tiêu chuẩn không bị mất mà lùi lại', async () => {
     const { email, cookie } = await newUser();
-    await buy(cookie, 'standard', 'month'); // 30 ngày Tiêu chuẩn
+    await buyAndPay(cookie, 'standard', 'month');
     expect((await me(cookie)).body.tier).toBe('standard');
-    await buy(cookie, 'pro', 'week'); // 7 ngày Pro
+    await buyAndPay(cookie, 'pro', 'week');
     expect((await me(cookie)).body.tier).toBe('pro');
     const user = (await store.getUserByEmail(email))!;
     expect(daysLeft(user.proUntil)).toBeCloseTo(7, 0);
-    expect(daysLeft(user.standardUntil)).toBeCloseTo(37, 0); // 30 + 7 ngày Pro
+    expect(daysLeft(user.standardUntil)).toBeCloseTo(37, 0);
   });
 
   it('mua Tiêu chuẩn khi đang có Pro: bắt đầu sau khi Pro hết', async () => {
     const { email, cookie } = await newUser();
-    await buy(cookie, 'pro', 'week');
-    await buy(cookie, 'standard', 'week');
+    await buyAndPay(cookie, 'pro', 'week');
+    await buyAndPay(cookie, 'standard', 'week');
     const user = (await store.getUserByEmail(email))!;
     expect(daysLeft(user.proUntil)).toBeCloseTo(7, 0);
     expect(daysLeft(user.standardUntil)).toBeCloseTo(14, 0);
     expect((await me(cookie)).body.tier).toBe('pro');
   });
 
-  it('webhook giả mạo (mã đơn không có thật hoặc chưa trả tiền) không kích hoạt gói', async () => {
-    const { email, cookie } = await newUser();
-    const checkout = await call<{ orderCode: number }>('POST', '/api/billing/checkout', { tier: 'pro', period: 'year' }, cookie);
-    const forged = await call('POST', '/api/billing/payos-webhook', { code: '00', success: true, data: { orderCode: checkout.body.orderCode, amount: 599000, description: 'PAID' } });
-    expect(forged.status).toBe(200);
-    const user = (await store.getUserByEmail(email))!;
-    expect(user.proUntil).toBeNull();
-    expect(user.standardUntil).toBeNull();
-    expect((await call('POST', '/api/billing/payos-webhook', { data: { orderCode: 12345 } })).status).toBe(200);
-    expect((await call('POST', '/api/billing/payos-webhook', 'garbage')).status).toBeLessThan(500);
-  });
-
-  it('trả thiếu tiền thì chưa kích hoạt', async () => {
-    const { email, cookie } = await newUser();
-    const checkout = await call<{ orderCode: number }>('POST', '/api/billing/checkout', { tier: 'standard', period: 'month' }, cookie);
-    payos.pay(checkout.body.orderCode, 1000);
-    expect((await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode: checkout.body.orderCode }, cookie)).body.status).toBe('pending');
-    expect((await store.getUserByEmail(email))!.standardUntil).toBeNull();
-  });
-
-  it('không xác nhận hộ đơn của người khác', async () => {
+  it('không xem được trạng thái đơn của người khác', async () => {
     const owner = await newUser();
     const other = await newUser();
-    const checkout = await call<{ orderCode: number }>('POST', '/api/billing/checkout', { tier: 'pro', period: 'month' }, owner.cookie);
-    payos.pay(checkout.body.orderCode);
-    expect((await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode: checkout.body.orderCode }, other.cookie)).body.status).toBe('unknown');
-    expect((await store.getUserByEmail(other.email))!.proUntil).toBeNull();
+    const checkout = (await call<Checkout>('POST', '/api/billing/checkout', { tier: 'pro', period: 'month' }, owner.cookie)).body;
+    await webhook(incoming(checkout));
+    expect((await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode: checkout.orderCode }, other.cookie)).body.status).toBe('unknown');
+    expect((await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode: 1 }, owner.cookie)).body.status).toBe('unknown');
+    expect((await call('POST', '/api/billing/confirm', { orderCode: checkout.orderCode })).status).toBe(401);
   });
 
-  it('đơn bị hủy được ghi nhận', async () => {
-    const { cookie } = await newUser();
-    const checkout = await call<{ orderCode: number }>('POST', '/api/billing/checkout', { tier: 'pro', period: 'month' }, cookie);
-    payos.orders.get(checkout.body.orderCode)!.status = 'CANCELLED';
-    expect((await call<{ status: string }>('POST', '/api/billing/confirm', { orderCode: checkout.body.orderCode }, cookie)).body.status).toBe('cancelled');
+  it('khi chưa cấu hình SePay: không tạo được đơn, webhook coi như không tồn tại', async () => {
+    const bare = await startServer(makeContextWithoutSepay());
+    const old = base;
+    base = bare.base;
+    try {
+      const { cookie } = await newUser();
+      expect((await call('POST', '/api/billing/checkout', { tier: 'pro', period: 'month' }, cookie)).status).toBe(503);
+      expect((await call<PlansResponse>('GET', '/api/plans')).body.billingEnabled).toBe(false);
+      expect((await call('POST', '/api/billing/sepay-webhook', { id: 1 }, undefined, { authorization: `Apikey ${SEPAY.apiKey}` })).status).toBe(404);
+    } finally {
+      base = old;
+      bare.server.closeAllConnections();
+      bare.server.close();
+    }
   });
 });
 

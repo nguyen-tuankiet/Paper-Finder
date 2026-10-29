@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { HistoryEntry, LibraryItem } from '../../shared/types.js';
 import { MemoryAccountStore } from '../src/accounts/memoryStore.js';
 import { hashPassword, verifyPassword } from '../src/accounts/passwords.js';
-import { PayOsClient } from '../src/accounts/payos.js';
+import { BillingService } from '../src/accounts/billing.js';
+import { extractOrderCode, memoFor, parseSepayPayload, qrUrl, verifyApiKey } from '../src/accounts/sepay.js';
 import { PgAccountStore } from '../src/accounts/pgStore.js';
 import { PERIOD_DAYS, applyPurchase, buildEntitlements, parsePlanKey, planKey, tierOf } from '../src/accounts/plans.js';
 import { QuotaService } from '../src/accounts/quota.js';
@@ -96,25 +97,95 @@ describe('hạn mức theo ngày', () => {
   });
 });
 
-describe('PayOS', () => {
-  it('ký đúng chuỗi quy định (các khóa theo thứ tự chữ cái)', () => {
-    const client = new PayOsClient({ clientId: 'c', apiKey: 'k', checksumKey: 'checksum' });
-    const signature = client.signCreate({ orderCode: 123, amount: 3000, description: 'VQRIO123', returnUrl: 'https://x/ok', cancelUrl: 'https://x/no' });
-    // HMAC-SHA256("amount=3000&cancelUrl=https://x/no&description=VQRIO123&orderCode=123&returnUrl=https://x/ok", "checksum")
-    expect(signature).toMatch(/^[0-9a-f]{64}$/);
-    expect(signature).toBe(client.signCreate({ orderCode: 123, amount: 3000, description: 'VQRIO123', returnUrl: 'https://x/ok', cancelUrl: 'https://x/no' }));
-    expect(signature).not.toBe(client.signCreate({ orderCode: 124, amount: 3000, description: 'VQRIO123', returnUrl: 'https://x/ok', cancelUrl: 'https://x/no' }));
+describe('SePay: đọc và đối chiếu giao dịch', () => {
+  it('nội dung chuyển khoản và QR', () => {
+    expect(memoFor('PF', 482913057)).toBe('PF482913057');
+    const url = new URL(qrUrl({ apiKey: 'k', accountNumber: '0123456789', bankName: 'MBBank', codePrefix: 'PF' }, 29000, 'PF482913057'));
+    expect(url.searchParams.get('amount')).toBe('29000');
+    expect(url.searchParams.get('des')).toBe('PF482913057');
   });
 
-  it('báo lỗi rõ ràng khi PayOS từ chối hoặc không kết nối được', async () => {
-    const reject = new PayOsClient({ clientId: 'c', apiKey: 'k', checksumKey: 's' }, async () => new Response(JSON.stringify({ code: '20', desc: 'Sai chữ ký' }), { status: 200 }));
-    await expect(reject.createPaymentLink({ orderCode: 1, amount: 1000, description: 'd', returnUrl: 'https://a', cancelUrl: 'https://b' })).rejects.toThrow('Sai chữ ký');
-    const down = new PayOsClient({ clientId: 'c', apiKey: 'k', checksumKey: 's' }, async () => {
-      throw new Error('ECONNREFUSED');
+  it('lấy mã đơn từ code hoặc nội dung, không phân biệt hoa thường, cho phép khoảng trắng', () => {
+    expect(extractOrderCode('PF', { content: 'Thanh toan PF482913057 cam on' })).toBe(482913057);
+    expect(extractOrderCode('PF', { content: 'pf482913057' })).toBe(482913057);
+    expect(extractOrderCode('PF', { content: 'PF 482913057' })).toBe(482913057);
+    expect(extractOrderCode('PF', { code: 'PF482913057', content: 'khong co' })).toBe(482913057);
+    expect(extractOrderCode('PF', { description: 'BankAPINotify PF482913057' })).toBe(482913057);
+    expect(extractOrderCode('TT', { content: 'TT123456789' })).toBe(123456789);
+    for (const bad of ['', 'PF', 'PF12345', 'PF1234567890123', 'XX482913057', 'toi chuyen PF abc']) expect(extractOrderCode('PF', { content: bad })).toBeNull();
+    expect(extractOrderCode('PF', {})).toBeNull();
+    expect(extractOrderCode('P.F', { content: 'PxF123456789' })).toBeNull(); // tiền tố được thoát ký tự đặc biệt
+  });
+
+  it('khóa API: đúng dạng Apikey, sai khóa, thiếu header', () => {
+    expect(verifyApiKey('Apikey abc12345', 'abc12345')).toBe(true);
+    expect(verifyApiKey('apikey   abc12345 ', 'abc12345')).toBe(true);
+    expect(verifyApiKey('Apikey abc12346', 'abc12345')).toBe(false);
+    expect(verifyApiKey('Bearer abc12345', 'abc12345')).toBe(false);
+    expect(verifyApiKey('abc12345', 'abc12345')).toBe(false);
+    expect(verifyApiKey(undefined, 'abc12345')).toBe(false);
+    expect(verifyApiKey('Apikey ', 'abc12345')).toBe(false);
+  });
+
+  it('đọc payload webhook chặt chẽ', () => {
+    expect(parseSepayPayload({ id: 92704, transferType: 'in', transferAmount: 2277000, accountNumber: '0123', content: 'PF1', code: null, referenceCode: 'FT1' })).toEqual({
+      id: '92704',
+      direction: 'in',
+      amount: 2277000,
+      accountNumber: '0123',
+      code: undefined,
+      content: 'PF1',
+      referenceCode: 'FT1',
     });
-    await expect(down.getPaymentInfo(1)).rejects.toThrow(/Không kết nối/);
-    const insecure = new PayOsClient({ clientId: 'c', apiKey: 'k', checksumKey: 's' }, async () => new Response(JSON.stringify({ code: '00', data: { checkoutUrl: 'http://evil' } })));
-    await expect(insecure.createPaymentLink({ orderCode: 1, amount: 1000, description: 'd', returnUrl: 'https://a', cancelUrl: 'https://b' })).rejects.toThrow();
+    expect(parseSepayPayload({ id: 'x1', transferType: 'out', transferAmount: '5000' })).toMatchObject({ id: 'x1', direction: 'out', amount: 5000 });
+    for (const bad of [null, 'text', 1, {}, { id: 1 }, { id: 1, transferType: 'in' }, { id: 1, transferType: 'in', transferAmount: -5 }, { id: 1, transferType: 'x', transferAmount: 5 }, { transferType: 'in', transferAmount: 5 }]) {
+      expect(parseSepayPayload(bad)).toBeNull();
+    }
+  });
+});
+
+describe('xử lý giao dịch SePay (BillingService)', () => {
+  const prices = { 'standard:week': 10_000, 'standard:month': 29_000, 'standard:year': 119_000, 'pro:week': 20_000, 'pro:month': 49_000, 'pro:year': 229_000 };
+  const sepay = { apiKey: 'k', accountNumber: '0123456789', bankName: 'MBBank', codePrefix: 'PF' };
+  const tx = (over: Record<string, unknown> = {}) => ({ id: '1', direction: 'in' as const, amount: 29_000, accountNumber: '0123456789', content: '', ...over });
+
+  it('kết quả từng trường hợp', async () => {
+    const store = new MemoryAccountStore();
+    const billing = new BillingService({ store, sepay, prices, now: () => new Date('2026-10-29T00:00:00Z') });
+    const user = (await store.createUser('a@b.co', 'h'))!;
+    const { orderCode, memo } = await billing.checkout(user, 'standard', 'month');
+
+    expect(await billing.handleTransaction(tx({ direction: 'out', content: memo }))).toEqual({ result: 'ignored' });
+    expect(await billing.handleTransaction(tx({ content: 'khong co ma' }))).toEqual({ result: 'unmatched' });
+    expect(await billing.handleTransaction(tx({ content: 'PF999999999' }))).toEqual({ result: 'unmatched' });
+    expect(await billing.handleTransaction(tx({ content: memo, accountNumber: '111' }))).toEqual({ result: 'wrong_account', orderCode });
+    expect(await billing.handleTransaction(tx({ content: memo, amount: 28_999 }))).toEqual({ result: 'underpaid', orderCode });
+    expect((await store.getOrder(orderCode))?.status).toBe('pending');
+    expect(await billing.handleTransaction(tx({ content: memo, id: '77' }))).toEqual({ result: 'activated', orderCode });
+    expect(await billing.handleTransaction(tx({ content: memo, id: '78' }))).toEqual({ result: 'duplicate', orderCode });
+    expect((await store.getOrder(orderCode))).toMatchObject({ status: 'paid', paymentRef: 'sepay:77' });
+  });
+
+  it('chưa cấu hình SePay thì mọi giao dịch bị bỏ qua và không tạo được đơn', async () => {
+    const store = new MemoryAccountStore();
+    const billing = new BillingService({ store, prices });
+    const user = (await store.createUser('a@b.co', 'h'))!;
+    expect(billing.enabled).toBe(false);
+    await expect(billing.checkout(user, 'pro', 'week')).rejects.toThrow();
+    expect(await billing.handleTransaction(tx({ content: 'PF123456789' }))).toEqual({ result: 'ignored' });
+  });
+
+  it('đơn quá hạn hiển thị thì báo hết hạn, nhưng tiền về muộn vẫn kích hoạt', async () => {
+    let now = new Date('2026-10-29T00:00:00Z');
+    const store = new MemoryAccountStore();
+    const billing = new BillingService({ store, sepay, prices, now: () => now });
+    const user = (await store.createUser('a@b.co', 'h'))!;
+    const { orderCode, memo } = await billing.checkout(user, 'pro', 'week');
+    expect((await billing.status(orderCode, user.id)).status).toBe('pending');
+    now = new Date('2026-10-30T01:00:00Z'); // hơn 24 giờ
+    expect((await billing.status(orderCode, user.id)).status).toBe('cancelled');
+    expect(await billing.handleTransaction(tx({ content: memo, amount: 20_000 }))).toEqual({ result: 'activated', orderCode });
+    expect((await billing.status(orderCode, user.id)).status).toBe('paid');
   });
 });
 
@@ -205,16 +276,17 @@ describe.each(factories)('kho tài khoản: %s', (_name, make) => {
   it('settleOrder chỉ kích hoạt một lần, kể cả khi gọi đồng thời', async () => {
     const store = await make();
     const u = (await store.createUser('a@b.co', 'h'))!;
-    const order: OrderRow = { orderCode: 1_700_000_000_000_123, userId: u.id, plan: 'standard:month', amount: 39_000, status: 'pending', createdAt: NOW.toISOString(), paidAt: null };
+    const order: OrderRow = { orderCode: 1_700_000_000_000_123, userId: u.id, plan: 'standard:month', amount: 39_000, status: 'pending', createdAt: NOW.toISOString(), paidAt: null, paymentRef: null };
     await store.createOrder(order);
     expect((await store.getOrder(order.orderCode))?.status).toBe('pending');
 
-    const results = await Promise.all([store.settleOrder(order.orderCode, NOW), store.settleOrder(order.orderCode, NOW), store.settleOrder(order.orderCode, NOW)]);
+    const results = await Promise.all([store.settleOrder(order.orderCode, NOW, 'sepay:1'), store.settleOrder(order.orderCode, NOW, 'sepay:2'), store.settleOrder(order.orderCode, NOW, 'sepay:3')]);
     expect(results.filter((r) => r?.activated).length).toBe(1);
     expect(results.every((r) => r?.order.status === 'paid')).toBe(true);
     expect((await store.getUserById(u.id))?.standardUntil).toBe(day(30));
     expect((await store.getUserById(u.id))?.proUntil).toBeNull();
     expect((await store.getOrder(order.orderCode))?.paidAt).toBe(NOW.toISOString());
+    expect((await store.getOrder(order.orderCode))?.paymentRef).toMatch(/^sepay:[123]$/); // chỉ lần gọi thắng cuộc được ghi
     expect(await store.settleOrder(999, NOW)).toBeNull();
 
     await store.setOrderStatus(order.orderCode, 'cancelled'); // đơn đã trả tiền không bị hủy
@@ -228,7 +300,7 @@ describe.each(factories)('kho tài khoản: %s', (_name, make) => {
     await store.createUser('e@f.co', 'h');
     await store.grantPlan(a.id, 'pro', 30, NOW);
     await store.grantPlan(b.id, 'standard', 7, NOW);
-    await store.createOrder({ orderCode: 5, userId: a.id, plan: 'pro:year', amount: 599_000, status: 'pending', createdAt: NOW.toISOString(), paidAt: null });
+    await store.createOrder({ orderCode: 5, userId: a.id, plan: 'pro:year', amount: 599_000, status: 'pending', createdAt: NOW.toISOString(), paidAt: null, paymentRef: null });
     await store.settleOrder(5, NOW);
     expect(await store.counts(NOW)).toEqual({ users: 3, activeStandard: 1, activePro: 1, paidOrders: 1, revenueVnd: 599_000 });
   });

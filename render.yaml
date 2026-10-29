@@ -30,11 +30,14 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
-      - key: PUBLIC_BASE_URL
+      # Nhận thanh toán chuyển khoản qua SePay (DEPLOY.md mục 7.3). Thiếu KEY/BANK_ACCOUNT/BANK_NAME = nút thanh toán bị tắt.
+      - key: SEPAY_API_KEY
         sync: false
-      - key: PAYOS_CLIENT_ID
+      - key: SEPAY_BANK_ACCOUNT
         sync: false
-      - key: PAYOS_API_KEY
+      - key: SEPAY_BANK_NAME
         sync: false
-      - key: PAYOS_CHECKSUM_KEY
+      - key: SEPAY_ACCOUNT_NAME
         sync: false
+      - key: SEPAY_CODE_PREFIX
+        value: PF

@@ -5,9 +5,10 @@ import type { ZodType } from 'zod';
 import type { Entitlements, LibraryItem, MeResponse, PaperRecord, PaymentStatusResponse, PlansResponse } from '../../../shared/types.js';
 import type { Logger } from '../logger.js';
 import { adminGrantSchema, changePasswordSchema, checkoutSchema, confirmPaymentSchema, loginSchema, registerSchema, saveLibrarySchema } from '../schemas.js';
+import { BillingError } from './billing.js';
 import { callerFrom, callerOf, currentSession, currentUser, toAccountUser, type AccountsContext } from './context.js';
 import { burnPasswordCheck, hashPassword, verifyPassword } from './passwords.js';
-import { PayOsError } from './payos.js';
+import { parseSepayPayload, verifyApiKey } from './sepay.js';
 import { SESSION_TTL_MS, clearedSessionCookie, sessionCookie } from './session.js';
 import type { UserRow } from './types.js';
 
@@ -21,6 +22,8 @@ export interface AccountRouteDeps {
   adminLimiter: RequestHandler;
   /** Máy chủ đã nạp dữ liệu xếp hạng tạp chí. */
   journalRankAvailable: boolean;
+  /** Khóa xác thực webhook SePay; không có thì đường dẫn webhook coi như không tồn tại. */
+  sepayApiKey?: string;
 }
 
 const issues = (error: { issues: { path: PropertyKey[]; message: string }[] }) => error.issues.map((i) => ({ path: i.path.join('.'), message: i.message }));
@@ -45,7 +48,7 @@ const wrap =
     handler(req, res).catch(next);
   };
 
-export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, adminLimiter, journalRankAvailable }: AccountRouteDeps): void {
+export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, adminLimiter, journalRankAvailable, sepayApiKey }: AccountRouteDeps): void {
   const authLimiter = rateLimit({
     windowMs: 15 * 60_000,
     limit: ctx.rateLimits.loginFailuresPer15Min,
@@ -188,7 +191,7 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
     }),
   );
 
-  // ---------- Thanh toán ----------
+  // ---------- Thanh toán chuyển khoản qua SePay ----------
 
   app.post(
     '/api/billing/checkout',
@@ -197,7 +200,7 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
     wrap(async (req, res) => {
       const user = await currentUser(ctx, req);
       if (!user) {
-        res.status(401).json({ error: 'unauthorized', message: 'Vui lòng đăng nhập trước khi nâng cấp.' });
+        res.status(401).json({ error: 'unauthorized', message: 'Vui lòng đăng nhập trước khi mua gói.' });
         return;
       }
       if (!ctx.billing.enabled) {
@@ -210,12 +213,12 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
         res.json(await ctx.billing.checkout(user, input.tier, input.period));
       } catch (error) {
         logger.error('checkout_failed', { error: error instanceof Error ? error.message : String(error) });
-        res.status(502).json({ error: 'payment_provider', message: error instanceof PayOsError ? error.message : 'Không tạo được link thanh toán.' });
+        res.status(500).json({ error: 'checkout_failed', message: error instanceof BillingError ? error.message : 'Không tạo được đơn thanh toán.' });
       }
     }),
   );
 
-  // Trang quay lại sau thanh toán gọi API này để kích hoạt ngay (phòng khi webhook chưa kịp tới).
+  // Trang thanh toán hỏi định kỳ đơn đã được kích hoạt chưa (việc kích hoạt do webhook SePay thực hiện).
   app.post(
     '/api/billing/confirm',
     noStore,
@@ -228,33 +231,39 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
       }
       const input = parse(confirmPaymentSchema, req.body, res);
       if (!input) return;
-      try {
-        const result = await ctx.billing.refresh(input.orderCode, user.id);
-        const fresh = result.user ?? (await ctx.store.getUserById(user.id));
-        const body: PaymentStatusResponse = { status: result.status, user: fresh ? toAccountUser(fresh, ctx.now()) : null };
-        res.json(body);
-      } catch (error) {
-        logger.error('confirm_failed', { error: error instanceof Error ? error.message : String(error) });
-        res.status(502).json({ error: 'payment_provider', message: 'Chưa kiểm tra được trạng thái thanh toán. Thử lại sau ít phút.' });
-      }
+      const result = await ctx.billing.status(input.orderCode, user.id);
+      const fresh = result.user ?? (await ctx.store.getUserById(user.id));
+      const body: PaymentStatusResponse = { status: result.status, user: fresh ? toAccountUser(fresh, ctx.now()) : null };
+      res.json(body);
     }),
   );
 
-  // PayOS gọi khi có giao dịch. Nội dung webhook KHÔNG được tin: chỉ lấy mã đơn rồi hỏi lại PayOS trạng thái thật.
+  // SePay gọi khi có tiền vào tài khoản. Xác thực bằng khóa API; luôn trả 200 {success:true} cho giao dịch đã đọc được
+  // (kể cả không khớp đơn nào) để SePay không thử lại vô ích. Lỗi hệ thống trả 500 để SePay thử lại.
   app.post(
-    '/api/billing/payos-webhook',
+    '/api/billing/sepay-webhook',
     wrap(async (req, res) => {
-      const raw = (req.body as { data?: { orderCode?: unknown } } | undefined)?.data?.orderCode;
-      const orderCode = typeof raw === 'number' ? raw : typeof raw === 'string' && /^\d+$/.test(raw) ? Number(raw) : NaN;
-      if (Number.isSafeInteger(orderCode) && orderCode > 0) {
-        try {
-          await ctx.billing.refresh(orderCode);
-        } catch (error) {
-          logger.error('webhook_refresh_failed', { error: error instanceof Error ? error.message : String(error) });
-        }
+      const key = sepayApiKey;
+      if (!key) {
+        res.status(404).json({ error: 'not_found', message: 'Không tìm thấy API.' });
+        return;
       }
-      // Luôn trả 200 để PayOS xác nhận được địa chỉ webhook (kể cả lệnh thử có mã đơn giả).
-      res.json({ ok: true });
+      if (!verifyApiKey(req.get('authorization'), key)) {
+        res.status(401).json({ success: false, message: 'Sai khóa xác thực.' });
+        return;
+      }
+      const tx = parseSepayPayload(req.body);
+      if (!tx) {
+        res.status(400).json({ success: false, message: 'Nội dung webhook không hợp lệ.' });
+        return;
+      }
+      const outcome = await ctx.billing.handleTransaction(tx);
+      if (outcome.result === 'activated') logger.info('payment_activated', { orderCode: outcome.orderCode, ref: tx.id, amount: tx.amount });
+      else if (outcome.result !== 'ignored' && outcome.result !== 'duplicate') {
+        // Tiền đã vào nhưng chưa kích hoạt được: cần bạn đối soát tay (cấp gói bằng lệnh admin).
+        logger.warn('payment_needs_attention', { result: outcome.result, orderCode: 'orderCode' in outcome ? outcome.orderCode : undefined, ref: tx.id, amount: tx.amount, content: tx.content.slice(0, 120) });
+      }
+      res.json({ success: true });
     }),
   );
 

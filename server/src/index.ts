@@ -68,7 +68,7 @@ const server = app.listen(config.port, () => {
     adminEnabled: Boolean(config.adminPassword),
     accounts: accounts ? accounts.store.kind : 'off',
     journalRank: journalRanker ? journalRanker.size : 'off',
-    billing: Boolean(accounts && config.payos),
+    billing: Boolean(accounts && config.sepay),
     serveStatic: Boolean(config.staticDir),
   });
 });

@@ -59,7 +59,7 @@ export interface AppDeps {
   signer?: UrlSigner;
   downloadOptions?: Partial<DownloadOptions>;
   adapters: AdapterMap;
-  config: Pick<AppConfig, 'corsOrigins' | 'rateLimitPerMinute' | 'trustProxy' | 'staticDir'> & Partial<Pick<AppConfig, 'adminPassword'>>;
+  config: Pick<AppConfig, 'corsOrigins' | 'rateLimitPerMinute' | 'trustProxy' | 'staticDir'> & Partial<Pick<AppConfig, 'adminPassword' | 'sepay'>>;
   logger: Logger;
   /** Thống kê sử dụng; mặc định chỉ lưu trong bộ nhớ. */
   stats?: StatsService;
@@ -127,7 +127,7 @@ export function createApp({ adapters, config, logger, stats = new StatsService()
     return token && safeEqual(token, config.adminPassword) ? 'ok' : 'bad';
   };
 
-  if (accounts) registerAccountRoutes(app, { ctx: accounts, logger, checkAdmin, adminLimiter, journalRankAvailable: Boolean(journalRanker) });
+  if (accounts) registerAccountRoutes(app, { ctx: accounts, logger, checkAdmin, adminLimiter, journalRankAvailable: Boolean(journalRanker), sepayApiKey: config.sepay?.apiKey });
   else {
     // Tính năng tài khoản tắt: giao diện vẫn hỏi /api/me và /api/plans để biết có cần hiện nút đăng nhập hay không.
     app.get('/api/me', (_req, res) => {

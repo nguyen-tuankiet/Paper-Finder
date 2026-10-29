@@ -83,7 +83,7 @@ npm start                   # backend phục vụ luôn web/dist tại http://lo
 | GET | `/api/admin/stats?days=30` | Thống kê sử dụng; cần header `Authorization: Bearer <ADMIN_PASSWORD>` |
 | GET | `/api/me`, `/api/plans` | Trạng thái đăng nhập, hạn mức lượt tìm; giá và các gói |
 | POST | `/api/auth/register`, `/login`, `/logout`, `/change-password` | Tài khoản email + mật khẩu (chỉ khi bật `SESSION_SECRET`) |
-| POST | `/api/billing/checkout`, `/confirm`, `/payos-webhook` | Tạo link thanh toán PayOS, kiểm tra và kích hoạt Pro |
+| POST | `/api/billing/checkout`, `/confirm`, `/sepay-webhook` | Tạo đơn chuyển khoản QR (SePay), kiểm tra trạng thái đơn, nhận webhook SePay để kích hoạt gói |
 | GET/POST/DELETE | `/api/library`, `/api/history` | Thư viện cá nhân và lịch sử tìm kiếm (từ hạng Tiêu chuẩn) |
 | POST | `/api/admin/grant`, GET `/api/admin/accounts` | Cấp gói thủ công và thống kê tài khoản (cần mật khẩu admin) |
 
@@ -145,7 +145,7 @@ Hỗ trợ các loại: bài tạp chí, hội nghị, sách, chương sách, lu
 
 ## Tài khoản, hạng và gói trả phí (tùy chọn)
 
-Đặt `SESSION_SECRET` để bật đăng nhập bằng email + mật khẩu (băm bằng scrypt, đăng ký xong tự đăng nhập, phiên là cookie HttpOnly nhớ ~6 tháng và tự gia hạn). Có bốn hạng: **Khách** (chưa đăng nhập, giới hạn nhiều nhất), **Miễn phí** (đã đăng nhập), **Tiêu chuẩn** và **Pro** (mua 7 ngày / 1 tháng / 1 năm); mỗi hạng khác nhau về lượt tìm mỗi ngày, số kết quả mỗi nguồn, số dòng xuất file, thư viện cá nhân, lịch sử tìm kiếm và xuất BibTeX/RIS (bảng đầy đủ trong `DEPLOY.md` mục 7). Không đặt `SESSION_SECRET` thì mọi thứ chạy như trước (không đăng nhập, không giới hạn). Dữ liệu tài khoản lưu ở PostgreSQL (`DATABASE_URL`) hoặc file JSON khi chạy local; thanh toán qua PayOS, kích hoạt tự động và đúng một lần cho mỗi đơn. Cấu hình, webhook và cấp Pro thủ công: xem `DEPLOY.md` mục 7 và `.env.example`.
+Đặt `SESSION_SECRET` để bật đăng nhập bằng email + mật khẩu (băm bằng scrypt, đăng ký xong tự đăng nhập, phiên là cookie HttpOnly nhớ ~6 tháng và tự gia hạn). Có bốn hạng: **Khách** (chưa đăng nhập, giới hạn nhiều nhất), **Miễn phí** (đã đăng nhập), **Tiêu chuẩn** và **Pro** (mua 7 ngày / 1 tháng / 1 năm); mỗi hạng khác nhau về lượt tìm mỗi ngày, số kết quả mỗi nguồn, số dòng xuất file, thư viện cá nhân, lịch sử tìm kiếm và xuất BibTeX/RIS (bảng đầy đủ trong `DEPLOY.md` mục 7). Không đặt `SESSION_SECRET` thì mọi thứ chạy như trước (không đăng nhập, không giới hạn). Dữ liệu tài khoản lưu ở PostgreSQL (`DATABASE_URL`) hoặc file JSON khi chạy local; thanh toán chuyển khoản QR qua SePay, kích hoạt tự động và đúng một lần cho mỗi đơn. Cấu hình, webhook và cấp Pro thủ công: xem `DEPLOY.md` mục 7 và `.env.example`.
 
 ## Tín hiệu chất lượng và công cụ cho luận văn
 

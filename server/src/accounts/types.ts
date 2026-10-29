@@ -16,7 +16,7 @@ export interface UserRow {
 export type OrderStatus = 'pending' | 'paid' | 'cancelled';
 
 export interface OrderRow {
-  /** Mã đơn gửi cho PayOS (số nguyên dương, duy nhất). */
+  /** Mã đơn 9 chữ số, nằm trong nội dung chuyển khoản (số nguyên dương, duy nhất). */
   orderCode: number;
   userId: string;
   /** Hạng và thời hạn đã mua, vd. "pro:month". */
@@ -25,6 +25,8 @@ export interface OrderRow {
   status: OrderStatus;
   createdAt: string;
   paidAt: string | null;
+  /** Mã giao dịch ngân hàng/SePay đã dùng để thanh toán đơn (đối soát), vd. sepay:12345. */
+  paymentRef: string | null;
 }
 
 export type SaveToLibraryResult = 'saved' | 'exists' | 'full';
@@ -61,7 +63,7 @@ export interface AccountStore {
    * Đánh dấu đơn đã thanh toán và cộng thời hạn MỘT LẦN DUY NHẤT dù được gọi nhiều lần (webhook + trang quay lại).
    * Trả `activated: false` nếu đơn đã được xử lý trước đó.
    */
-  settleOrder(orderCode: number, now: Date): Promise<{ order: OrderRow; user: UserRow; activated: boolean } | null>;
+  settleOrder(orderCode: number, now: Date, paymentRef?: string): Promise<{ order: OrderRow; user: UserRow; activated: boolean } | null>;
   counts(now: Date): Promise<AccountCounts>;
 
   listLibrary(userId: string): Promise<LibraryItem[]>;

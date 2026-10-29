@@ -1,10 +1,11 @@
 import { CheckCircleFilled, CrownFilled, MinusOutlined } from '@ant-design/icons';
 import { Alert, Button, Modal, Segmented, Tag, Typography } from 'antd';
 import { useEffect, useState, type ReactNode } from 'react';
-import type { Entitlements, PaidTier, PlanOption, PlanPeriod } from '../../../shared/types';
+import type { CheckoutResponse, Entitlements, PaidTier, PlanOption, PlanPeriod } from '../../../shared/types';
 import { useAccount } from '../lib/accountContext';
 import { startCheckout } from '../lib/api';
 import { AUTHOR } from '../lib/author';
+import { PaymentStep } from './PaymentStep';
 
 const fmt = (n: number) => new Intl.NumberFormat('vi-VN').format(n);
 const money = (value: number) => `${fmt(value)}đ`;
@@ -76,9 +77,11 @@ export function UpgradeModal({ open, reason, initialTier, onClose, onNeedLogin }
   const [period, setPeriod] = useState<PlanPeriod>('month');
   const [busy, setBusy] = useState<PaidTier | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [order, setOrder] = useState<{ checkout: CheckoutResponse; tier: PaidTier; period: PlanPeriod } | null>(null);
 
   useEffect(() => {
     if (open) setError(null);
+    else setOrder(null);
   }, [open]);
 
   const standard = tiers.find((t) => t.tier === 'standard');
@@ -95,10 +98,11 @@ export function UpgradeModal({ open, reason, initialTier, onClose, onNeedLogin }
     setBusy(tier);
     setError(null);
     try {
-      const { checkoutUrl } = await startCheckout(tier, period);
-      window.location.assign(checkoutUrl); // chuyển sang trang thanh toán QR của PayOS
+      const checkout = await startCheckout(tier, period);
+      setOrder({ checkout, tier, period });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không tạo được link thanh toán.');
+      setError(err instanceof Error ? err.message : 'Không tạo được đơn thanh toán.');
+    } finally {
       setBusy(null);
     }
   };
@@ -137,74 +141,86 @@ export function UpgradeModal({ open, reason, initialTier, onClose, onNeedLogin }
   };
 
   return (
-    <Modal open={open} onCancel={onClose} footer={null} centered width="min(860px, calc(100vw - 16px))" destroyOnHidden title={null}>
-      <Typography.Title level={4} style={{ marginTop: 0 }}>
-        <CrownFilled style={{ color: '#d4a017' }} /> Chọn gói PaperFinder
-      </Typography.Title>
-      {reason && <Alert type="info" showIcon title={reason} style={{ marginBottom: 12 }} />}
-
-      {billingEnabled && (
-        <div className="pf-cmp-period">
-          <Typography.Text type="secondary">Thời hạn:</Typography.Text>
-          <Segmented<PlanPeriod>
-            value={period}
-            onChange={setPeriod}
-            options={(['week', 'month', 'year'] as const).map((p) => ({ value: p, label: PERIOD_LABEL[p] }))}
-            disabled={busy !== null}
-          />
-        </div>
-      )}
-
-      {standard && pro && (
-        <div className="pf-cmp" role="table" aria-label="So sánh hạng Tiêu chuẩn và Pro">
-          <div className="pf-cmp-corner" role="columnheader" />
-          <div role="columnheader">{header('standard')}</div>
-          <div role="columnheader">{header('pro')}</div>
-          {rows.map((row) => {
-            const differs = row.standard !== row.pro;
-            return (
-              <div className="pf-cmp-row" role="row" key={row.label}>
-                <div className="pf-cmp-label" role="rowheader">
-                  {row.label}
-                </div>
-                <div className="pf-cmp-cell" role="cell">
-                  <CellView value={row.standard} />
-                </div>
-                <div className={`pf-cmp-cell${differs ? ' is-better' : ''}`} role="cell">
-                  <CellView value={row.pro} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {error && <Alert type="error" showIcon title={error} style={{ marginTop: 12 }} />}
-
-      {billingEnabled ? (
-        <Typography.Paragraph type="secondary" style={{ margin: '14px 0 0', fontSize: 12.5 }}>
-          “Rẻ hơn” là so với giá mỗi ngày khi mua theo tuần. Thanh toán bằng chuyển khoản QR ngân hàng qua PayOS, tự kích hoạt sau khi nhận tiền, không tự động gia hạn. Mua thêm cùng hạng thì cộng dồn. Mua Pro khi đang có Tiêu chuẩn: Pro dùng ngay, phần Tiêu chuẩn còn lại được giữ và dùng tiếp sau khi Pro hết. Cần hỗ trợ, liên hệ{' '}
-          <a href={AUTHOR.github} target="_blank" rel="noopener noreferrer">
-            {AUTHOR.name}
-          </a>
-          .
-        </Typography.Paragraph>
+    <Modal open={open} onCancel={onClose} footer={null} centered width={order ? 'min(760px, calc(100vw - 16px))' : 'min(860px, calc(100vw - 16px))'} destroyOnHidden title={null}>
+      {order ? (
+        <PaymentStep
+          order={order.checkout}
+          planLabel={`${(order.tier === 'pro' ? pro : standard)?.label ?? order.tier} · ${PERIOD_LABEL[order.period]}`}
+          onBack={() => setOrder(null)}
+          onPaid={() => void account.refresh()}
+          onClose={onClose}
+        />
       ) : (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginTop: 12 }}
-          title="Thanh toán trực tuyến chưa được bật"
-          description={
-            <>
-              Hiện chưa thể mua trực tiếp trên trang. Vui lòng liên hệ{' '}
+        <>
+          <Typography.Title level={4} style={{ marginTop: 0 }}>
+            <CrownFilled style={{ color: '#d4a017' }} /> Chọn gói PaperFinder
+          </Typography.Title>
+          {reason && <Alert type="info" showIcon title={reason} style={{ marginBottom: 12 }} />}
+
+          {billingEnabled && (
+            <div className="pf-cmp-period">
+              <Typography.Text type="secondary">Thời hạn:</Typography.Text>
+              <Segmented<PlanPeriod>
+                value={period}
+                onChange={setPeriod}
+                options={(['week', 'month', 'year'] as const).map((p) => ({ value: p, label: PERIOD_LABEL[p] }))}
+                disabled={busy !== null}
+              />
+            </div>
+          )}
+
+          {standard && pro && (
+            <div className="pf-cmp" role="table" aria-label="So sánh hạng Tiêu chuẩn và Pro">
+              <div className="pf-cmp-corner" role="columnheader" />
+              <div role="columnheader">{header('standard')}</div>
+              <div role="columnheader">{header('pro')}</div>
+              {rows.map((row) => {
+                const differs = row.standard !== row.pro;
+                return (
+                  <div className="pf-cmp-row" role="row" key={row.label}>
+                    <div className="pf-cmp-label" role="rowheader">
+                      {row.label}
+                    </div>
+                    <div className="pf-cmp-cell" role="cell">
+                      <CellView value={row.standard} />
+                    </div>
+                    <div className={`pf-cmp-cell${differs ? ' is-better' : ''}`} role="cell">
+                      <CellView value={row.pro} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {error && <Alert type="error" showIcon title={error} style={{ marginTop: 12 }} />}
+
+          {billingEnabled ? (
+            <Typography.Paragraph type="secondary" style={{ margin: '14px 0 0', fontSize: 12.5 }}>
+              “Rẻ hơn” là so với giá mỗi ngày khi mua theo tuần. Thanh toán bằng chuyển khoản ngân hàng quét mã QR, tự kích hoạt sau khi nhận tiền (thường dưới 1 phút), không tự động gia hạn. Mua thêm cùng hạng thì cộng dồn. Mua Pro khi đang có Tiêu chuẩn: Pro dùng ngay, phần Tiêu chuẩn còn lại được giữ và dùng tiếp sau khi Pro hết. Cần hỗ trợ, liên hệ{' '}
               <a href={AUTHOR.github} target="_blank" rel="noopener noreferrer">
                 {AUTHOR.name}
-              </a>{' '}
-              để được nâng cấp thủ công.
-            </>
-          }
-        />
+              </a>
+              .
+            </Typography.Paragraph>
+          ) : (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginTop: 12 }}
+              title="Thanh toán trực tuyến chưa được bật"
+              description={
+                <>
+                  Hiện chưa thể mua trực tiếp trên trang. Vui lòng liên hệ{' '}
+                  <a href={AUTHOR.github} target="_blank" rel="noopener noreferrer">
+                    {AUTHOR.name}
+                  </a>{' '}
+                  để được nâng cấp thủ công.
+                </>
+              }
+            />
+          )}
+        </>
       )}
     </Modal>
   );

@@ -19,6 +19,7 @@
     "start": "npm run start -w server",
     "test": "npm run test -w server && npm run test -w web",
     "test:integration": "npm run test:integration -w server",
+    "sepay:simulate": "node scripts/simulate-sepay.mjs",
     "typecheck": "npm run typecheck -w server && npm run typecheck -w web"
   },
   "devDependencies": {

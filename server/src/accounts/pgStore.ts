@@ -31,8 +31,10 @@ const SCHEMA = [
     amount INTEGER NOT NULL,
     status TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
-    paid_at TIMESTAMPTZ
+    paid_at TIMESTAMPTZ,
+    payment_ref TEXT
   )`,
+  'ALTER TABLE pf_orders ADD COLUMN IF NOT EXISTS payment_ref TEXT',
   `CREATE TABLE IF NOT EXISTS pf_library (
     user_id TEXT NOT NULL,
     item_key TEXT NOT NULL,
@@ -69,6 +71,7 @@ interface OrderDbRow {
   status: string;
   created_at: Date | string;
   paid_at: Date | string | null;
+  payment_ref?: string | null;
 }
 
 const toUser = (r: UserDbRow): UserRow => ({
@@ -89,6 +92,7 @@ const toOrder = (r: OrderDbRow): OrderRow => ({
   status: r.status as OrderStatus,
   createdAt: iso(r.created_at) ?? new Date().toISOString(),
   paidAt: iso(r.paid_at),
+  paymentRef: r.payment_ref ?? null,
 });
 
 /** Kho tài khoản lưu trong PostgreSQL (Neon, Supabase, Render Postgres...). Bảng được tạo tự động khi khởi động. */
@@ -161,7 +165,7 @@ export class PgAccountStore implements AccountStore {
   }
 
   async createOrder(order: OrderRow): Promise<void> {
-    await this.pool.query('INSERT INTO pf_orders (order_code, user_id, plan, amount, status, created_at, paid_at) VALUES ($1, $2, $3, $4, $5, $6, $7)', [
+    await this.pool.query('INSERT INTO pf_orders (order_code, user_id, plan, amount, status, created_at, paid_at, payment_ref) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)', [
       order.orderCode,
       order.userId,
       order.plan,
@@ -169,6 +173,7 @@ export class PgAccountStore implements AccountStore {
       order.status,
       new Date(order.createdAt),
       order.paidAt ? new Date(order.paidAt) : null,
+      order.paymentRef ?? null,
     ]);
   }
 
@@ -181,12 +186,12 @@ export class PgAccountStore implements AccountStore {
     await this.pool.query("UPDATE pf_orders SET status = $2 WHERE order_code = $1 AND status <> 'paid'", [orderCode, status]);
   }
 
-  async settleOrder(orderCode: number, now: Date) {
+  async settleOrder(orderCode: number, now: Date, paymentRef?: string) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
       // Câu UPDATE có điều kiện chỉ thành công với MỘT lần gọi: các lần còn lại (webhook lặp, trang quay lại) thấy đơn đã paid.
-      const claimed = await client.query<OrderDbRow>("UPDATE pf_orders SET status = 'paid', paid_at = $2 WHERE order_code = $1 AND status <> 'paid' RETURNING *", [orderCode, now]);
+      const claimed = await client.query<OrderDbRow>("UPDATE pf_orders SET status = 'paid', paid_at = $2, payment_ref = $3 WHERE order_code = $1 AND status <> 'paid' RETURNING *", [orderCode, now, paymentRef ?? null]);
       const existing = claimed.rows[0] ?? (await client.query<OrderDbRow>('SELECT * FROM pf_orders WHERE order_code = $1', [orderCode])).rows[0];
       const plan = existing ? parsePlanKey(existing.plan) : null;
       if (!existing || !plan) {

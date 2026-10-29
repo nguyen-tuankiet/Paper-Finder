@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 import type { PlanKey } from './accounts/plans.js';
+import type { SepayConfig } from './accounts/sepay.js';
 import type { LogLevel } from './logger.js';
 
 const envSchema = z.object({
@@ -39,18 +40,23 @@ const envSchema = z.object({
   ACCOUNTS_FILE: z.string().optional(),
   FREE_DAILY_SEARCHES: z.coerce.number().int().min(1).max(1000).default(10),
   GUEST_DAILY_SEARCHES: z.coerce.number().int().min(0).max(1000).default(3),
-  /** Giá từng gói (VND): hạng Tiêu chuẩn và Pro, mỗi hạng mua 7 ngày, 1 tháng hoặc 1 năm. PayOS yêu cầu tối thiểu 2.000đ. */
+  /** Giá từng gói (VND): hạng Tiêu chuẩn và Pro, mỗi hạng mua 7 ngày, 1 tháng hoặc 1 năm. Tối thiểu 2.000đ. */
   PRICE_STANDARD_WEEK: z.coerce.number().int().min(2000).max(100_000_000).default(10_000),
   PRICE_STANDARD_MONTH: z.coerce.number().int().min(2000).max(100_000_000).default(29_000),
   PRICE_STANDARD_YEAR: z.coerce.number().int().min(2000).max(100_000_000).default(119_000),
   PRICE_PRO_WEEK: z.coerce.number().int().min(2000).max(100_000_000).default(20_000),
   PRICE_PRO_MONTH: z.coerce.number().int().min(2000).max(100_000_000).default(49_000),
   PRICE_PRO_YEAR: z.coerce.number().int().min(2000).max(100_000_000).default(229_000),
-  /** Địa chỉ công khai của trang (https://ten-mien.com) để PayOS đưa người dùng quay lại sau thanh toán. */
-  PUBLIC_BASE_URL: z.string().url().optional(),
-  PAYOS_CLIENT_ID: z.string().min(1).optional(),
-  PAYOS_API_KEY: z.string().min(1).optional(),
-  PAYOS_CHECKSUM_KEY: z.string().min(1).optional(),
+  /** Khóa xác thực webhook SePay (SePay gửi header `Authorization: Apikey <khóa>`). */
+  SEPAY_API_KEY: z.string().min(8, 'SEPAY_API_KEY cần ít nhất 8 ký tự').optional(),
+  /** Số tài khoản ngân hàng nhận tiền, đã liên kết với SePay. */
+  SEPAY_BANK_ACCOUNT: z.string().regex(/^\d{4,20}$/, 'SEPAY_BANK_ACCOUNT chỉ gồm chữ số').optional(),
+  /** Tên ngân hàng theo danh sách VietQR/SePay, vd. MBBank, Vietcombank, ACB. */
+  SEPAY_BANK_NAME: z.string().min(2).max(40).optional(),
+  /** Tên chủ tài khoản (hiển thị cho khách đối chiếu). */
+  SEPAY_ACCOUNT_NAME: z.string().max(80).optional(),
+  /** Tiền tố mã thanh toán, phải trùng "Cấu trúc mã thanh toán" trong SePay. */
+  SEPAY_CODE_PREFIX: z.string().regex(/^[A-Za-z]{2,6}$/, 'SEPAY_CODE_PREFIX gồm 2-6 chữ cái').default('PF'),
   /** File CSV xếp hạng tạp chí tải từ scimagojr.com. Mặc định ./data/scimagojr.csv; không có file thì tính năng xếp hạng tự tắt. */
   SJR_CSV_PATH: z.string().optional(),
   STATIC_DIR: z.string().optional(),
@@ -81,8 +87,7 @@ export interface AppConfig {
   guestDailySearches: number;
   /** Giá theo khóa gói, vd. prices['pro:month']. */
   prices: Record<PlanKey, number>;
-  publicBaseUrl?: string;
-  payos?: { clientId: string; apiKey: string; checksumKey: string };
+  sepay?: SepayConfig;
   sjrCsvPath: string;
   staticDir?: string;
   logLevel: LogLevel;
@@ -143,11 +148,16 @@ export function parseConfig(env: Record<string, string | undefined>, cwd = proce
       'pro:month': parsed.PRICE_PRO_MONTH,
       'pro:year': parsed.PRICE_PRO_YEAR,
     },
-    publicBaseUrl: parsed.PUBLIC_BASE_URL?.replace(/\/+$/, ''),
-    // Chỉ bật thanh toán khi đủ cả ba giá trị và biết địa chỉ trang để PayOS trả người dùng về.
-    payos:
-      parsed.PAYOS_CLIENT_ID && parsed.PAYOS_API_KEY && parsed.PAYOS_CHECKSUM_KEY && parsed.PUBLIC_BASE_URL
-        ? { clientId: parsed.PAYOS_CLIENT_ID, apiKey: parsed.PAYOS_API_KEY, checksumKey: parsed.PAYOS_CHECKSUM_KEY }
+    // Chỉ bật thanh toán khi đủ khóa webhook, số tài khoản và tên ngân hàng.
+    sepay:
+      parsed.SEPAY_API_KEY && parsed.SEPAY_BANK_ACCOUNT && parsed.SEPAY_BANK_NAME
+        ? {
+            apiKey: parsed.SEPAY_API_KEY,
+            accountNumber: parsed.SEPAY_BANK_ACCOUNT,
+            bankName: parsed.SEPAY_BANK_NAME,
+            accountName: parsed.SEPAY_ACCOUNT_NAME,
+            codePrefix: parsed.SEPAY_CODE_PREFIX.toUpperCase(),
+          }
         : undefined,
     sjrCsvPath: parsed.SJR_CSV_PATH ? path.resolve(cwd, parsed.SJR_CSV_PATH) : path.resolve(cwd, 'data', 'scimagojr.csv'),
     staticDir,

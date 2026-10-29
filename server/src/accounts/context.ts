@@ -5,9 +5,9 @@ import type { AppConfig } from '../config.js';
 import type { Logger } from '../logger.js';
 import { BillingService } from './billing.js';
 import { MemoryAccountStore } from './memoryStore.js';
-import { PayOsClient } from './payos.js';
 import { PgAccountStore } from './pgStore.js';
 import { buildEntitlements, tierOf, type PlanKey } from './plans.js';
+import type { SepayConfig } from './sepay.js';
 import { QuotaService, type Identity } from './quota.js';
 import { SessionSigner, SESSION_COOKIE, readCookie } from './session.js';
 import type { AccountStore, UserRow } from './types.js';
@@ -32,7 +32,7 @@ export interface AccountsOptions {
   freeDailySearches: number;
   guestDailySearches: number;
   timezone: string;
-  billing: { payos?: PayOsClient; publicBaseUrl?: string; prices: Record<PlanKey, number> };
+  billing: { sepay?: SepayConfig; prices: Record<PlanKey, number> };
   rateLimits?: Partial<AccountsContext['rateLimits']>;
   now?: () => Date;
 }
@@ -69,7 +69,7 @@ export async function buildAccounts(config: AppConfig, logger: Logger): Promise<
     freeDailySearches: config.freeDailySearches,
     guestDailySearches: config.guestDailySearches,
     timezone: config.statsTimezone,
-    billing: { payos: config.payos ? new PayOsClient(config.payos) : undefined, publicBaseUrl: config.publicBaseUrl, prices: config.prices },
+    billing: { sepay: config.sepay, prices: config.prices },
   });
 }
 

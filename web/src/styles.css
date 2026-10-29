@@ -1346,3 +1346,92 @@ body {
     margin-inline-end: 0;
   }
 }
+
+/* ---------- Bước thanh toán chuyển khoản QR ---------- */
+.pf-pay-body {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+.pf-pay-qr {
+  flex: 0 0 auto;
+  width: 264px;
+  padding: 12px;
+  border: 1px solid #e3e8ef;
+  border-radius: 12px;
+  background: #fff;
+  text-align: center;
+}
+.pf-pay-qr img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.pf-pay-qr.is-expired img {
+  opacity: 0.25;
+  filter: grayscale(1);
+}
+.pf-pay-qr-fallback {
+  padding: 40px 8px;
+  color: #6b7280;
+  font-size: 13px;
+}
+.pf-pay-info {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.pf-pay-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid #eef1f5;
+}
+.pf-pay-label {
+  flex: 0 0 96px;
+  color: #6b7280;
+  font-size: 13px;
+}
+.pf-pay-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.pf-pay-status {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f4f7fb;
+  color: #3b4558;
+  font-size: 13.5px;
+}
+.pf-pay-status .ant-alert {
+  background: transparent;
+}
+.pf-pay-problem {
+  margin-top: 4px;
+  color: #b45309;
+  font-size: 12.5px;
+}
+.pf-pay-done {
+  padding: 24px 8px;
+  text-align: center;
+}
+.pf-pay-done-icon {
+  color: #2f8f4e;
+  font-size: 52px;
+}
+@media (max-width: 640px) {
+  .pf-pay-body {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pf-pay-qr {
+    width: min(264px, 100%);
+    margin-inline: auto;
+  }
+  .pf-pay-label {
+    flex-basis: 88px;
+  }
+}

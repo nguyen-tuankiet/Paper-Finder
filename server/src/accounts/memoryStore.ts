@@ -105,7 +105,7 @@ export class MemoryAccountStore implements AccountStore {
   }
 
   async createOrder(order: OrderRow): Promise<void> {
-    this.orders.set(order.orderCode, { ...order });
+    this.orders.set(order.orderCode, { ...order, paymentRef: order.paymentRef ?? null });
     this.touch();
   }
 
@@ -122,7 +122,7 @@ export class MemoryAccountStore implements AccountStore {
     }
   }
 
-  async settleOrder(orderCode: number, now: Date) {
+  async settleOrder(orderCode: number, now: Date, paymentRef?: string) {
     const order = this.orders.get(orderCode);
     if (!order) return null;
     const user = this.users.get(order.userId);
@@ -131,6 +131,7 @@ export class MemoryAccountStore implements AccountStore {
     if (order.status === 'paid') return { order: { ...order }, user: { ...user }, activated: false };
     order.status = 'paid';
     order.paidAt = now.toISOString();
+    order.paymentRef = paymentRef ?? null;
     Object.assign(user, applyPurchase(user, plan.tier, PERIOD_DAYS[plan.period], now));
     this.touch();
     return { order: { ...order }, user: { ...user }, activated: true };

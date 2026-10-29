@@ -1,22 +1,29 @@
 import { randomInt } from 'node:crypto';
-import { PAID_TIERS, PLAN_PERIODS, type PaidTier, type PaymentStatusResponse, type PlanOption, type PlanPeriod } from '../../../shared/types.js';
+import { PAID_TIERS, PLAN_PERIODS, type CheckoutResponse, type PaidTier, type PaymentStatusResponse, type PlanOption, type PlanPeriod } from '../../../shared/types.js';
 import { PERIOD_DAYS, PERIOD_LABEL, parsePlanKey, planKey, type PlanKey } from './plans.js';
-import { PayOsClient, PayOsError } from './payos.js';
+import { memoFor, qrUrl, extractOrderCode, type SepayConfig, type SepayTransaction } from './sepay.js';
 import type { AccountStore, OrderRow, UserRow } from './types.js';
+
+/** Đơn chưa thanh toán được coi là hết hạn sau chừng này (chỉ để hiển thị; tiền về muộn vẫn được kích hoạt). */
+const ORDER_TTL_MS = 24 * 60 * 60 * 1000;
 
 export interface BillingOptions {
   store: AccountStore;
   /** Không có = chưa cấu hình thanh toán (vẫn có thể cấp gói thủ công qua trang admin). */
-  payos?: PayOsClient;
-  publicBaseUrl?: string;
+  sepay?: SepayConfig;
   /** Giá theo khóa gói, vd. prices['pro:month']. */
   prices: Record<PlanKey, number>;
   now?: () => Date;
 }
 
-/** Nội dung chuyển khoản hiển thị cho khách: PayOS giới hạn 25 ký tự và nên không dấu. */
-const DESCRIPTION: Record<PaidTier, string> = { standard: 'PF Tieu chuan', pro: 'PF Pro' };
-const PERIOD_ASCII: Record<PlanPeriod, string> = { week: '7 ngay', month: '1 thang', year: '1 nam' };
+export class BillingError extends Error {}
+
+/** Kết quả xử lý một giao dịch SePay, để ghi log và kiểm thử. */
+export type WebhookOutcome =
+  | { result: 'activated'; orderCode: number }
+  | { result: 'duplicate'; orderCode: number }
+  | { result: 'ignored' | 'unmatched' }
+  | { result: 'underpaid' | 'wrong_account'; orderCode: number };
 
 export class BillingService {
   private readonly now: () => Date;
@@ -26,7 +33,7 @@ export class BillingService {
   }
 
   get enabled(): boolean {
-    return Boolean(this.options.payos && this.options.publicBaseUrl);
+    return Boolean(this.options.sepay);
   }
 
   /** Mọi gói có thể mua: mỗi hạng trả phí × mỗi thời hạn. */
@@ -36,55 +43,72 @@ export class BillingService {
     );
   }
 
-  /** Tạo đơn chờ thanh toán và link thanh toán PayOS. */
-  async checkout(user: UserRow, tier: PaidTier, period: PlanPeriod): Promise<{ checkoutUrl: string; orderCode: number }> {
-    const { payos, publicBaseUrl, store } = this.options;
-    if (!payos || !publicBaseUrl) throw new PayOsError('Chưa cấu hình cổng thanh toán.');
+  /** Mã đơn ngắn 9 chữ số (đủ gọn để khách gõ trong nội dung chuyển khoản), kiểm tra không trùng. */
+  private async newOrderCode(): Promise<number> {
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const code = randomInt(100_000_000, 1_000_000_000);
+      if (!(await this.options.store.getOrder(code))) return code;
+    }
+    throw new BillingError('Không tạo được mã đơn. Vui lòng thử lại.');
+  }
+
+  /** Tạo đơn chờ thanh toán và trả hướng dẫn chuyển khoản (số tài khoản, số tiền, nội dung, mã QR). */
+  async checkout(user: UserRow, tier: PaidTier, period: PlanPeriod): Promise<CheckoutResponse> {
+    const { sepay, store } = this.options;
+    if (!sepay) throw new BillingError('Chưa cấu hình thanh toán.');
     const plan = planKey(tier, period);
     const amount = this.options.prices[plan];
-    if (!amount) throw new PayOsError('Gói không hợp lệ.');
+    if (!amount) throw new BillingError('Gói không hợp lệ.');
 
-    // Mã đơn: số nguyên dương duy nhất (PayOS cho phép tới 2^53-1); mili-giây * 1000 + ngẫu nhiên.
-    const orderCode = this.now().getTime() * 1000 + randomInt(0, 1000);
-    const order: OrderRow = { orderCode, userId: user.id, plan, amount, status: 'pending', createdAt: this.now().toISOString(), paidAt: null };
+    const orderCode = await this.newOrderCode();
+    const now = this.now();
+    const order: OrderRow = { orderCode, userId: user.id, plan, amount, status: 'pending', createdAt: now.toISOString(), paidAt: null, paymentRef: null };
     await store.createOrder(order);
-    try {
-      const { checkoutUrl } = await payos.createPaymentLink({
-        orderCode,
-        amount,
-        description: `${DESCRIPTION[tier]} ${PERIOD_ASCII[period]}`,
-        returnUrl: `${publicBaseUrl}/?billing=return`,
-        cancelUrl: `${publicBaseUrl}/?billing=cancel`,
-      });
-      return { checkoutUrl, orderCode };
-    } catch (error) {
-      await store.setOrderStatus(orderCode, 'cancelled');
-      throw error;
-    }
+    const memo = memoFor(sepay.codePrefix, orderCode);
+    return {
+      orderCode,
+      amount,
+      memo,
+      bankName: sepay.bankName,
+      accountNumber: sepay.accountNumber,
+      accountName: sepay.accountName,
+      qrUrl: qrUrl(sepay, amount, memo),
+      expiresAt: new Date(now.getTime() + ORDER_TTL_MS).toISOString(),
+    };
+  }
+
+  /** Trạng thái đơn cho trang thanh toán hỏi định kỳ. Chỉ đọc từ kho (webhook mới là nơi kích hoạt); chỉ chủ đơn xem được. */
+  async status(orderCode: number, userId: string): Promise<{ status: PaymentStatusResponse['status']; user: UserRow | null }> {
+    const order = await this.options.store.getOrder(orderCode);
+    if (!order || order.userId !== userId) return { status: 'unknown', user: null };
+    const user = await this.options.store.getUserById(order.userId);
+    if (order.status === 'paid') return { status: 'paid', user };
+    // Quá hạn hiển thị thì báo hết hạn (nhưng nếu tiền về muộn, webhook vẫn kích hoạt và lần hỏi sau sẽ là paid).
+    const expired = this.now().getTime() - new Date(order.createdAt).getTime() > ORDER_TTL_MS;
+    return { status: order.status === 'cancelled' || expired ? 'cancelled' : 'pending', user: null };
   }
 
   /**
-   * Hỏi PayOS trạng thái đơn và kích hoạt gói nếu đã trả đủ tiền. An toàn khi gọi lặp (webhook + trang quay lại):
-   * thời hạn chỉ được cộng một lần cho mỗi đơn. `requireUserId`: chỉ cho người sở hữu đơn kiểm tra.
+   * Xử lý một giao dịch tiền vào do SePay báo. Kích hoạt khi: là tiền vào, nội dung có mã đơn hợp lệ, đúng tài khoản nhận
+   * và số tiền không thấp hơn giá gói. Kích hoạt đúng một lần cho mỗi đơn dù SePay gửi lặp (thử lại khi lỗi mạng).
+   * Chuyển thiếu tiền thì chưa kích hoạt (cần xử lý tay); chuyển dư vẫn kích hoạt.
    */
-  async refresh(orderCode: number, requireUserId?: string): Promise<{ status: PaymentStatusResponse['status']; user: UserRow | null }> {
-    const { store, payos } = this.options;
-    const order = await store.getOrder(orderCode);
-    if (!order || (requireUserId && order.userId !== requireUserId)) return { status: 'unknown', user: null };
-    if (order.status === 'paid') return { status: 'paid', user: await store.getUserById(order.userId) };
-    if (!payos || !parsePlanKey(order.plan)) return { status: 'pending', user: null };
+  async handleTransaction(tx: SepayTransaction): Promise<WebhookOutcome> {
+    const { sepay, store } = this.options;
+    if (!sepay || tx.direction !== 'in') return { result: 'ignored' };
 
-    const info = await payos.getPaymentInfo(orderCode);
-    if (info.status === 'PAID') {
-      // Chỉ kích hoạt khi PayOS xác nhận đã nhận đủ số tiền của gói.
-      if (info.amountPaid < order.amount) return { status: 'pending', user: null };
-      const settled = await store.settleOrder(orderCode, this.now());
-      return { status: 'paid', user: settled?.user ?? null };
-    }
-    if (info.status === 'CANCELLED' || info.status === 'EXPIRED') {
-      await store.setOrderStatus(orderCode, 'cancelled');
-      return { status: 'cancelled', user: null };
-    }
-    return { status: 'pending', user: null };
+    const orderCode = extractOrderCode(sepay.codePrefix, { code: tx.code, content: tx.content });
+    if (orderCode === null) return { result: 'unmatched' };
+    const order = await store.getOrder(orderCode);
+    if (!order || !parsePlanKey(order.plan)) return { result: 'unmatched' };
+
+    const digits = (value: string) => value.replace(/\D/g, '');
+    if (tx.accountNumber && digits(tx.accountNumber) !== digits(sepay.accountNumber)) return { result: 'wrong_account', orderCode };
+    if (order.status === 'paid') return { result: 'duplicate', orderCode };
+    if (tx.amount < order.amount) return { result: 'underpaid', orderCode };
+
+    const settled = await store.settleOrder(orderCode, this.now(), `sepay:${tx.id}`);
+    if (!settled) return { result: 'unmatched' };
+    return settled.activated ? { result: 'activated', orderCode } : { result: 'duplicate', orderCode };
   }
 }

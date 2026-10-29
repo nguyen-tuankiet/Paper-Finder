@@ -195,7 +195,7 @@ export interface PlanOption {
 export interface PlansResponse {
   /** Máy chủ có bật tài khoản hay không (cần SESSION_SECRET). Tắt = không giới hạn gì như trước. */
   accountsEnabled: boolean;
-  /** Đã cấu hình cổng thanh toán PayOS hay chưa. */
+  /** Đã cấu hình nhận thanh toán SePay (chuyển khoản QR) hay chưa. */
   billingEnabled: boolean;
   /** Quyền lợi của cả bốn hạng, để giao diện hiển thị bảng so sánh. */
   tiers: Entitlements[];
@@ -252,9 +252,19 @@ export interface CheckoutRequest {
   period: PlanPeriod;
 }
 
+/** Hướng dẫn chuyển khoản cho một đơn: khách quét QR hoặc chuyển đúng số tiền, đúng nội dung. */
 export interface CheckoutResponse {
-  checkoutUrl: string;
   orderCode: number;
+  amount: number;
+  /** Nội dung chuyển khoản bắt buộc (chứa mã đơn). */
+  memo: string;
+  bankName: string;
+  accountNumber: string;
+  accountName?: string;
+  /** Ảnh QR VietQR đã có sẵn số tiền và nội dung. */
+  qrUrl: string;
+  /** Hết hạn hiển thị (ISO); tiền về muộn vẫn được kích hoạt. */
+  expiresAt: string;
 }
 
 export interface PaymentStatusResponse {

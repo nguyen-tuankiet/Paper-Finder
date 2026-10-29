@@ -71,7 +71,7 @@ Mở `https://<địa-chỉ>/admin`, nhập `ADMIN_PASSWORD` để xem số ngư
 
 Dịch vụ thường được bật tự động deploy khi bạn `git push` lên nhánh `main` (xem mục **Settings → Auto-Deploy** của dịch vụ để chắc chắn). Nếu không thấy deploy mới, bấm **Manual Deploy → Deploy latest commit** trong trang dịch vụ.
 
-## 7. Tài khoản, hạng và thanh toán PayOS (tùy chọn)
+## 7. Tài khoản, hạng và thanh toán SePay (tùy chọn)
 
 Mặc định tính năng này **tắt**: ai cũng dùng đầy đủ không giới hạn. Khi bật có bốn hạng:
 
@@ -115,17 +115,31 @@ Trên Render, thêm biến môi trường:
 
 Đổi `SESSION_SECRET` sẽ đăng xuất mọi người. Nên bật `TRUST_PROXY=1` (đã có trong `render.yaml`) để cookie đăng nhập có cờ `Secure` và giới hạn theo IP đúng.
 
-### 7.3. Thanh toán PayOS
+### 7.3. Thanh toán SePay (chuyển khoản QR)
 
-1. Đăng ký tài khoản và tạo **kênh thanh toán** tại [payos.vn](https://payos.vn), liên kết tài khoản ngân hàng nhận tiền.
-2. Lấy **Client ID**, **API Key**, **Checksum Key** của kênh.
-3. Trên Render thêm: `PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY` và `PUBLIC_BASE_URL` (địa chỉ công khai, vd. `https://paperfinder.onrender.com`, không có dấu `/` cuối). Thiếu một trong bốn thì nút thanh toán bị tắt.
-4. Trong cài đặt kênh PayOS, đặt **Webhook URL** = `https://<địa-chỉ>/api/billing/payos-webhook`.
-5. **Thử trước khi bán:** tạo một đơn nhỏ (có thể đặt tạm `PRICE_STANDARD_WEEK=2000`), thanh toán thật, kiểm tra hạng tự bật, rồi trả giá về như cũ.
+Cách hoạt động: người dùng bấm mua, máy chủ tạo đơn với **mã 9 chữ số** và hiện mã VietQR (số tiền và nội dung `PF<mã đơn>` điền sẵn). Người dùng chuyển khoản như bình thường; [SePay](https://sepay.vn) theo dõi tài khoản ngân hàng của bạn và gọi **webhook** về máy chủ. Máy chủ đối chiếu nội dung chuyển khoản với đơn, kiểm tra đúng số tài khoản và số tiền, rồi kích hoạt gói. Trang thanh toán tự hỏi trạng thái mỗi 4 giây nên người dùng thấy gói bật ngay.
 
-Cách hoạt động và an toàn: khi người dùng bấm thanh toán, máy chủ tạo đơn và link PayOS. Sau khi trả tiền, PayOS gọi webhook và đưa người dùng về trang. **Máy chủ không tin nội dung webhook**: nó chỉ lấy mã đơn rồi hỏi lại PayOS trạng thái thật và số tiền đã nhận, chỉ kích hoạt khi đã trả đủ, và chỉ cộng thời hạn **một lần** cho mỗi đơn (webhook gọi lặp hay trang quay lại gọi cùng lúc đều an toàn). Gói không tự động gia hạn.
+An toàn: webhook phải có header `Authorization: Apikey <SEPAY_API_KEY>` (sai thì bị từ chối 401); chỉ kích hoạt khi là **tiền vào**, đúng **số tài khoản** của bạn, số tiền **không thấp hơn** giá đơn (chuyển thừa vẫn kích hoạt, chuyển thiếu thì không); mỗi đơn chỉ cộng thời hạn **một lần** dù SePay gọi lặp. Đơn hiển thị 24 giờ; tiền về muộn hơn vẫn kích hoạt. Gói không tự động gia hạn.
 
-> Phần tích hợp PayOS được viết theo tài liệu công khai của PayOS và kiểm thử bằng PayOS giả trong mã nguồn, **chưa được thử với PayOS thật**. Hãy làm bước thử ở mục 7.3.5 và xem log `checkout_failed` / `confirm_failed` nếu có lỗi.
+Cài đặt:
+
+1. Đăng ký [sepay.vn](https://sepay.vn), **liên kết tài khoản ngân hàng** nhận tiền (làm theo hướng dẫn của SePay cho ngân hàng của bạn).
+2. Trên SePay: **Tích hợp → Webhooks → Thêm webhook**. Điền: URL gọi = `https://<địa-chỉ>/api/billing/sepay-webhook`; sự kiện = **có tiền vào**; kiểu chứng thực = **API Key**, giá trị là chuỗi bí mật bạn tự đặt (>= 8 ký tự).
+3. Trên SePay: **Cấu hình công ty → Cấu trúc mã thanh toán**, đặt tiền tố trùng `SEPAY_CODE_PREFIX` (mặc định `PF`).
+4. Trên Render thêm: `SEPAY_API_KEY` (đúng chuỗi ở bước 2), `SEPAY_BANK_ACCOUNT` (số tài khoản nhận), `SEPAY_BANK_NAME` (tên ngân hàng theo VietQR, vd. `MBBank`, `Vietcombank`, `ACB`; xem danh sách ở qr.sepay.vn), tùy chọn `SEPAY_ACCOUNT_NAME` (tên chủ tài khoản hiển thị) và `SEPAY_CODE_PREFIX`. Thiếu một trong ba biến đầu thì nút thanh toán bị tắt.
+5. **Thử trước khi bán:** đặt tạm `PRICE_STANDARD_WEEK=2000`, mua một đơn và chuyển khoản thật số tiền đó, kiểm tra hạng tự bật, rồi trả giá về như cũ.
+
+**Thử ở máy local, không cần tiền thật:** thêm vào `.env` giá trị bất kỳ cho `SEPAY_API_KEY`, `SEPAY_BANK_ACCOUNT`, `SEPAY_BANK_NAME`, chạy `npm run dev`, đăng ký tài khoản, bấm mua để hiện mã QR, rồi ở cửa sổ lệnh khác chạy:
+
+```powershell
+npm run sepay:simulate -- <mã đơn 9 chữ số> <số tiền>
+```
+
+Trang thanh toán sẽ tự chuyển sang "Thanh toán thành công". Thử thêm các trường hợp lỗi: `--key sai` (bị từ chối 401), số tiền thấp hơn giá đơn (không kích hoạt), `--account 111` (lệch tài khoản), `--id <số>` lặp lại cùng giá trị (không cộng lần hai), `--out` (tiền ra, bị bỏ qua). Mã QR thật vẫn hiện (ảnh do qr.sepay.vn dựng) nhưng quét chỉ có ý nghĩa với tài khoản thật.
+
+Đối soát: khoản tiền vào **không khớp đơn nào** (sai nội dung, thiếu tiền, lệch tài khoản) được ghi log mức cảnh báo `payment_needs_attention` kèm mã giao dịch; hãy xem log định kỳ và cấp gói thủ công (mục 7.4) hoặc hoàn tiền. Giao diện SePay cũng liệt kê mọi giao dịch để đối chiếu.
+
+> Phần SePay được viết theo tài liệu webhook công khai của SePay và kiểm thử bằng giao dịch giả lập (đúng định dạng payload) trong mã nguồn, **chưa được thử với SePay thật**. Hãy làm bước thử ở mục 7.3.5 và xem log `payment_needs_attention` nếu đơn không tự kích hoạt.
 
 ### 7.4. Cấp gói thủ công và xem thống kê tài khoản
 

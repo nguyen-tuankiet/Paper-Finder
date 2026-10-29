@@ -76,7 +76,7 @@ const FAQ: { q: string; a: ReactNode }[] = [
   },
   {
     q: 'Vì sao tôi bị giới hạn? Mua gói thế nào?',
-    a: 'Để duy trì chi phí máy chủ và tôn trọng giới hạn của các nguồn dữ liệu, khách và thành viên miễn phí có số lượt tìm cố định mỗi ngày, đặt lại vào 0 giờ (giờ Việt Nam). Lần tìm không có nguồn nào trả kết quả hoặc bị hủy sẽ được hoàn lại lượt. Có hai hạng trả phí là Tiêu chuẩn và Pro, mỗi hạng mua 7 ngày, 1 tháng hoặc 1 năm bằng chuyển khoản QR qua PayOS; gói tự kích hoạt sau khi nhận tiền và không tự động gia hạn. Mua thêm cùng hạng thì cộng dồn; mua Pro khi đang có Tiêu chuẩn thì Pro dùng ngay và thời gian Tiêu chuẩn còn lại được giữ để dùng tiếp sau đó. Khi gói hết hạn, dữ liệu thư viện và lịch sử vẫn được giữ và xem lại được khi bạn mua lại.',
+    a: 'Để duy trì chi phí máy chủ và tôn trọng giới hạn của các nguồn dữ liệu, khách và thành viên miễn phí có số lượt tìm cố định mỗi ngày, đặt lại vào 0 giờ (giờ Việt Nam). Lần tìm không có nguồn nào trả kết quả hoặc bị hủy sẽ được hoàn lại lượt. Có hai hạng trả phí là Tiêu chuẩn và Pro, mỗi hạng mua 7 ngày, 1 tháng hoặc 1 năm bằng chuyển khoản ngân hàng quét mã QR; gói tự kích hoạt sau khi nhận tiền và không tự động gia hạn. Mua thêm cùng hạng thì cộng dồn; mua Pro khi đang có Tiêu chuẩn thì Pro dùng ngay và thời gian Tiêu chuẩn còn lại được giữ để dùng tiếp sau đó. Khi gói hết hạn, dữ liệu thư viện và lịch sử vẫn được giữ và xem lại được khi bạn mua lại.',
   },
   {
     q: 'Có một nguồn báo lỗi hoặc hết hạn mức thì sao?',
@@ -122,7 +122,7 @@ function PrivacyContent() {
         Từ hạng Tiêu chuẩn, <b>thư viện</b> (các bài bạn bấm “Lưu”) và <b>lịch sử tìm kiếm</b> (điều kiện tìm: từ khóa, nguồn, khoảng năm — không gồm kết quả; giữ 20 lần gần nhất với Tiêu chuẩn, 50 với Pro) được lưu gắn với tài khoản để bạn xem lại; bạn xóa được bất cứ lúc nào. Đây là ngoại lệ của câu “không lưu từ khóa thành lịch sử” ở trên, và chỉ áp dụng cho tài khoản trả phí.
       </Typography.Paragraph>
       <Typography.Paragraph>
-        Thanh toán do <b>PayOS</b> xử lý trên trang của họ; PaperFinder không nhận hay lưu số thẻ/tài khoản ngân hàng của bạn, chỉ lưu mã đơn, số tiền và trạng thái thanh toán để kích hoạt gói.
+        Thanh toán là chuyển khoản ngân hàng thông thường (quét mã VietQR); PaperFinder không nhận hay lưu số thẻ hay tài khoản ngân hàng của bạn, chỉ lưu mã đơn, số tiền và mã giao dịch để kích hoạt gói.
       </Typography.Paragraph>
       <Typography.Title level={5}>Dữ liệu trên trình duyệt của bạn</Typography.Title>
       <Typography.Paragraph>
