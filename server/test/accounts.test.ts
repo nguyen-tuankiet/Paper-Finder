@@ -703,6 +703,38 @@ describe('quản trị', () => {
     expect(counts.body.users).toBeGreaterThan(0);
   });
 
+  it('báo cáo doanh thu cần mật khẩu admin và khớp với đơn đã thanh toán', async () => {
+    expect((await call('GET', '/api/admin/revenue')).status).toBe(401);
+    expect((await call('GET', '/api/admin/revenue', undefined, undefined, { authorization: 'Bearer sai' })).status).toBe(401);
+    type Revenue = { today: { revenueVnd: number; orders: number }; allTime: { revenueVnd: number; orders: number }; payingUsers: number; byPlan: { tier: string; period: string; orders: number }[]; recentOrders: { email: string | null; status: string; paymentRef: string | null; userId?: string }[]; funnel: { created: number; paid: number; pending: number } };
+    const before = (await call<Revenue>('GET', '/api/admin/revenue', undefined, undefined, admin)).body;
+    const { email, cookie } = await newUser();
+    await buyAndPay(cookie, 'standard', 'month');
+    const unpaid = (await call<Checkout>('POST', '/api/billing/checkout', { tier: 'pro', period: 'week' }, cookie)).body; // đơn chưa trả không được tính
+    const after = await call<Revenue>('GET', '/api/admin/revenue?days=7', undefined, undefined, admin);
+    expect(after.status).toBe(200);
+    expect(after.body.allTime.revenueVnd - before.allTime.revenueVnd).toBe(PRICES['standard:month']);
+    expect(after.body.allTime.orders - before.allTime.orders).toBe(1);
+    expect(after.body.payingUsers - before.payingUsers).toBe(1);
+    expect(after.body.byPlan.some((p) => p.tier === 'standard' && p.period === 'month')).toBe(true);
+    expect(after.body.funnel.created - before.funnel.created).toBe(2);
+    const mine = after.body.recentOrders.filter((o) => o.email === email);
+    expect(mine.map((o) => o.status).sort()).toEqual(['paid', 'pending']);
+    expect(mine.find((o) => o.status === 'paid')?.paymentRef).toMatch(/^sepay:/);
+    expect(mine.every((o) => o.userId === undefined)).toBe(true);
+    expect(unpaid.orderCode).toBeGreaterThan(0);
+  });
+
+  it('báo cáo doanh thu không tồn tại khi tài khoản tắt', async () => {
+    const off = await startServer(undefined);
+    try {
+      const res = await fetch(`${off.base}/api/admin/revenue`, { headers: admin });
+      expect(res.status).not.toBe(200);
+    } finally {
+      await new Promise((r) => off.server.close(r));
+    }
+  });
+
   it('cấp gói không nêu hạng thì mặc định là Pro', async () => {
     const { email, cookie } = await newUser();
     expect((await call('POST', '/api/admin/grant', { email, days: 10 }, undefined, admin)).status).toBe(200);

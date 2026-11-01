@@ -1,3 +1,4 @@
+import pg from 'pg';
 import { buildAccounts } from './accounts/context.js';
 import { createApp } from './app.js';
 import { loadEnvFiles, parseConfig } from './config.js';
@@ -6,6 +7,7 @@ import { Limiter } from './lib/limiter.js';
 import { createLogger } from './logger.js';
 import { JournalRanker } from './services/journalRank.js';
 import { StatsService } from './services/stats.js';
+import { PgStatsBackend } from './services/statsPg.js';
 import { UrlSigner } from './services/download.js';
 import { CrossrefAdapter } from './sources/crossref.js';
 import { OpenAlexAdapter } from './sources/openalex.js';
@@ -46,8 +48,17 @@ if (config.semanticScholarApiKey) {
   adapters.semanticscholar = new SemanticScholarAdapter({ http, limiter: new Limiter(1, 1100), apiKey: config.semanticScholarApiKey });
 }
 
-const stats = new StatsService({ filePath: config.statsFile, timezone: config.statsTimezone, retentionDays: config.statsRetentionDays, logger });
-const accounts = await buildAccounts(config, logger);
+// Một kết nối chung tới PostgreSQL cho cả tài khoản lẫn thống kê (nếu có DATABASE_URL); không có thì thống kê ghi ra file.
+const pool = config.databaseUrl ? new pg.Pool({ connectionString: config.databaseUrl, max: 5, idleTimeoutMillis: 30_000, connectionTimeoutMillis: 10_000 }) : undefined;
+const stats = new StatsService({
+  filePath: config.statsFile,
+  backend: pool ? await PgStatsBackend.create(pool) : undefined,
+  timezone: config.statsTimezone,
+  retentionDays: config.statsRetentionDays,
+  logger,
+});
+await stats.init();
+const accounts = await buildAccounts(config, logger, pool);
 const journalRanker = JournalRanker.fromFile(config.sjrCsvPath);
 const app = createApp({
   adapters,
@@ -67,6 +78,7 @@ const server = app.listen(config.port, () => {
     sources: Object.keys(adapters),
     adminEnabled: Boolean(config.adminPassword),
     accounts: accounts ? accounts.store.kind : 'off',
+    statsStorage: stats.storage,
     journalRank: journalRanker ? journalRanker.size : 'off',
     billing: Boolean(accounts && config.sepay),
     serveStatic: Boolean(config.staticDir),
@@ -76,9 +88,12 @@ const server = app.listen(config.port, () => {
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     logger.info('server_stopping', { signal });
-    stats.stop(); // ghi nốt thống kê ra file
-    void accounts?.store.close(); // ghi nốt tài khoản / đóng kết nối cơ sở dữ liệu
-    server.close(() => process.exit(0));
+    void (async () => {
+      await stats.stop(); // ghi nốt thống kê (file hoặc cơ sở dữ liệu)
+      await (accounts?.store.close() ?? pool?.end()); // ghi nốt tài khoản / đóng kết nối cơ sở dữ liệu
+    })()
+      .catch((error) => logger.error('shutdown_failed', { error: error instanceof Error ? error.message : String(error) }))
+      .finally(() => server.close(() => process.exit(0)));
     setTimeout(() => process.exit(0), 3000).unref();
   });
 }

@@ -1435,3 +1435,10 @@ body {
     flex-basis: 88px;
   }
 }
+
+/* ---------- Trang quản trị: các khối xếp dọc trong từng tab ---------- */
+.pf-admin-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}

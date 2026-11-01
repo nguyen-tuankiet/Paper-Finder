@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import type { Request } from 'express';
+import type pg from 'pg';
 import type { AccountUser, Entitlements, Tier } from '../../../shared/types.js';
 import type { AppConfig } from '../config.js';
 import type { Logger } from '../logger.js';
@@ -21,6 +22,8 @@ export interface AccountsContext {
   entitlements: Record<Tier, Entitlements>;
   /** Khóa băm IP của khách (không bao giờ lưu IP gốc). */
   guestSecret: string;
+  /** Múi giờ chia ngày (báo cáo doanh thu, hạn mức theo ngày). */
+  timezone: string;
   /** Chống lạm dụng theo IP: số lần tạo tài khoản mỗi giờ và số lần đăng nhập sai mỗi 15 phút. */
   rateLimits: { registerPerHour: number; loginFailuresPer15Min: number };
   now: () => Date;
@@ -47,19 +50,20 @@ export function createAccountsContext(options: AccountsOptions): AccountsContext
     billing: new BillingService({ store: options.store, now, ...options.billing }),
     entitlements,
     guestSecret: `guest|${options.sessionSecret}`,
+    timezone: options.timezone,
     rateLimits: { registerPerHour: 10, loginFailuresPer15Min: 10, ...options.rateLimits },
     now,
   };
 }
 
 /** Dựng tài khoản từ cấu hình môi trường. Trả undefined khi chưa đặt SESSION_SECRET (tính năng tài khoản tắt). */
-export async function buildAccounts(config: AppConfig, logger: Logger): Promise<AccountsContext | undefined> {
+export async function buildAccounts(config: AppConfig, logger: Logger, pool?: pg.Pool): Promise<AccountsContext | undefined> {
   if (!config.sessionSecret) return undefined;
   // Render Free xóa sạch ổ đĩa mỗi lần khởi động lại: lưu tài khoản và đơn thanh toán ở đó sẽ làm mất gói người dùng đã mua.
   if (!config.databaseUrl && process.env.RENDER && !process.env.ACCOUNTS_FILE && process.env.ALLOW_EPHEMERAL_ACCOUNTS !== '1') {
     throw new Error('Tài khoản đang bật (SESSION_SECRET) nhưng chưa có DATABASE_URL: dữ liệu sẽ mất khi Render khởi động lại. Hãy tạo cơ sở dữ liệu PostgreSQL (xem DEPLOY.md mục 7) hoặc gỡ SESSION_SECRET.');
   }
-  const store = config.databaseUrl ? await PgAccountStore.connect(config.databaseUrl) : new MemoryAccountStore({ filePath: config.accountsFile, logger });
+  const store = pool ? await PgAccountStore.withPool(pool) : config.databaseUrl ? await PgAccountStore.connect(config.databaseUrl) : new MemoryAccountStore({ filePath: config.accountsFile, logger });
   if (store.kind !== 'postgres') {
     logger.warn('accounts_not_durable', { message: 'Chưa đặt DATABASE_URL: tài khoản lưu trong file JSON, sẽ mất nếu máy chủ không có ổ đĩa bền (vd. Render Free).' });
   }

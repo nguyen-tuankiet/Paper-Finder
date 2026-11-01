@@ -50,7 +50,10 @@ const envSchema = z.object({
   /** Khóa xác thực webhook SePay (SePay gửi header `Authorization: Apikey <khóa>`). */
   SEPAY_API_KEY: z.string().min(8, 'SEPAY_API_KEY cần ít nhất 8 ký tự').optional(),
   /** Số tài khoản ngân hàng nhận tiền, đã liên kết với SePay. */
-  SEPAY_BANK_ACCOUNT: z.string().regex(/^\d{4,20}$/, 'SEPAY_BANK_ACCOUNT chỉ gồm chữ số').optional(),
+  // Số tài khoản hoặc VA (có thể có chữ cái, vd. 96247NJ49C của BIDV).
+  SEPAY_BANK_ACCOUNT: z.string().regex(/^[A-Za-z0-9]{4,30}$/, 'SEPAY_BANK_ACCOUNT chỉ gồm chữ và số, không có khoảng trắng hay dấu gạch').optional(),
+  // Các số tài khoản khác cũng được nhận là tiền vào của bạn, cách nhau bằng dấu phẩy (vd. số tài khoản chính khi SEPAY_BANK_ACCOUNT là VA).
+  SEPAY_ACCOUNT_ALIASES: z.string().optional(),
   /** Tên ngân hàng theo danh sách VietQR/SePay, vd. MBBank, Vietcombank, ACB. */
   SEPAY_BANK_NAME: z.string().min(2).max(40).optional(),
   /** Tên chủ tài khoản (hiển thị cho khách đối chiếu). */
@@ -154,6 +157,7 @@ export function parseConfig(env: Record<string, string | undefined>, cwd = proce
         ? {
             apiKey: parsed.SEPAY_API_KEY,
             accountNumber: parsed.SEPAY_BANK_ACCOUNT,
+            accountAliases: (parsed.SEPAY_ACCOUNT_ALIASES ?? '').split(',').map((v) => v.trim()).filter(Boolean),
             bankName: parsed.SEPAY_BANK_NAME,
             accountName: parsed.SEPAY_ACCOUNT_NAME,
             codePrefix: parsed.SEPAY_CODE_PREFIX.toUpperCase(),

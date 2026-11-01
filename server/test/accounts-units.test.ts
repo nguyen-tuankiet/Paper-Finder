@@ -7,7 +7,7 @@ import type { HistoryEntry, LibraryItem } from '../../shared/types.js';
 import { MemoryAccountStore } from '../src/accounts/memoryStore.js';
 import { hashPassword, verifyPassword } from '../src/accounts/passwords.js';
 import { BillingService } from '../src/accounts/billing.js';
-import { extractOrderCode, memoFor, parseSepayPayload, qrUrl, verifyApiKey } from '../src/accounts/sepay.js';
+import { extractOrderCode, isOurAccount, memoFor, parseSepayPayload, qrUrl, verifyApiKey } from '../src/accounts/sepay.js';
 import { PgAccountStore } from '../src/accounts/pgStore.js';
 import { PERIOD_DAYS, applyPurchase, buildEntitlements, parsePlanKey, planKey, tierOf } from '../src/accounts/plans.js';
 import { QuotaService } from '../src/accounts/quota.js';
@@ -144,6 +144,41 @@ describe('SePay: đọc và đối chiếu giao dịch', () => {
   });
 });
 
+describe('SePay: tài khoản nhận (VA của BIDV...)', () => {
+  const va = { apiKey: 'k', accountNumber: '96247NJ49C', accountAliases: ['3144423864'], bankName: 'BIDV', codePrefix: 'PF' };
+
+  it('nhận giao dịch báo theo VA, theo tài khoản chính hoặc theo tài khoản phụ; không phân biệt hoa thường và dấu cách', () => {
+    expect(isOurAccount(va, { accountNumber: '96247NJ49C' })).toBe(true);
+    expect(isOurAccount(va, { accountNumber: '96247nj49c' })).toBe(true);
+    expect(isOurAccount(va, { accountNumber: '3144423864' })).toBe(true);
+    expect(isOurAccount(va, { accountNumber: '3144 4238-64' })).toBe(true);
+    expect(isOurAccount(va, { accountNumber: '9999999999', subAccount: '96247NJ49C' })).toBe(true);
+  });
+
+  it('từ chối tài khoản lạ; không có thông tin tài khoản thì không từ chối', () => {
+    expect(isOurAccount(va, { accountNumber: '9999999999' })).toBe(false);
+    expect(isOurAccount(va, { accountNumber: '9999999999', subAccount: 'ABC' })).toBe(false);
+    expect(isOurAccount({ ...va, accountAliases: undefined }, { accountNumber: '3144423864' })).toBe(false);
+    expect(isOurAccount(va, { accountNumber: '' })).toBe(true);
+  });
+
+  it('QR dùng số VA và payload đọc được tài khoản phụ', () => {
+    expect(new URL(qrUrl(va, 2000, 'PF123456789')).searchParams.get('acc')).toBe('96247NJ49C');
+    expect(parseSepayPayload({ id: 1, transferType: 'in', transferAmount: 5, accountNumber: '3144423864', subAccount: '96247NJ49C' })).toMatchObject({ accountNumber: '3144423864', subAccount: '96247NJ49C' });
+  });
+
+  it('BillingService kích hoạt khi tiền vào báo theo tài khoản chính của VA', async () => {
+    const store = new MemoryAccountStore();
+    const billing = new BillingService({ store, sepay: va, prices: { 'standard:week': 2_000, 'standard:month': 29_000, 'standard:year': 119_000, 'pro:week': 20_000, 'pro:month': 49_000, 'pro:year': 229_000 } });
+    const user = (await store.createUser('a@b.co', 'h'))!;
+    const a = await billing.checkout(user, 'standard', 'week');
+    expect(a.accountNumber).toBe('96247NJ49C');
+    expect(await billing.handleTransaction({ id: '1', direction: 'in', amount: 2_000, accountNumber: '3144423864', content: a.memo })).toEqual({ result: 'activated', orderCode: a.orderCode });
+    const b = await billing.checkout(user, 'standard', 'week');
+    expect(await billing.handleTransaction({ id: '2', direction: 'in', amount: 2_000, accountNumber: '8888888888', content: b.memo })).toEqual({ result: 'wrong_account', orderCode: b.orderCode });
+  });
+});
+
 describe('xử lý giao dịch SePay (BillingService)', () => {
   const prices = { 'standard:week': 10_000, 'standard:month': 29_000, 'standard:year': 119_000, 'pro:week': 20_000, 'pro:month': 49_000, 'pro:year': 229_000 };
   const sepay = { apiKey: 'k', accountNumber: '0123456789', bankName: 'MBBank', codePrefix: 'PF' };
@@ -228,6 +263,22 @@ describe.each(factories)('kho tài khoản: %s', (_name, make) => {
     expect((await store.getUserByEmail('user@EXAMPLE.com'))?.id).toBe(u!.id);
     expect((await store.getUserById(u!.id))?.email).toBe('user@example.com');
     expect(await store.getUserById('khong-co')).toBeNull();
+  });
+
+  it('liệt kê đơn mới nhất trước kèm email, giới hạn số đơn', async () => {
+    const store = await make();
+    const u = (await store.createUser('Buyer@Example.com', 'h'))!;
+    const mk = (orderCode: number, n: number, userId = u.id) => ({ orderCode, userId, plan: 'pro:week' as const, amount: 20_000, status: 'pending' as const, createdAt: day(n), paidAt: null, paymentRef: null });
+    await store.createOrder(mk(100000001, 1));
+    await store.createOrder(mk(100000002, 3));
+    await store.createOrder(mk(100000003, 2, 'tai-khoan-da-xoa'));
+    await store.settleOrder(100000002, NOW, 'sepay:9');
+    const all = await store.listOrders(10);
+    expect(all.map((o) => o.orderCode)).toEqual([100000002, 100000003, 100000001]);
+    expect(all[0]).toMatchObject({ email: 'buyer@example.com', status: 'paid', paymentRef: 'sepay:9' });
+    expect(all[1]?.email).toBeNull();
+    expect(await store.listOrders(1)).toHaveLength(1);
+    expect(await store.listOrders(0)).toEqual([]);
   });
 
   it('đổi mật khẩu tăng sessionVersion', async () => {

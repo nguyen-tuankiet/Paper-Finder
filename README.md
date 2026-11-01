@@ -81,6 +81,7 @@ npm start                   # backend phục vụ luôn web/dist tại http://lo
 | GET | `/api/sources` | Danh sách nguồn đang bật và trạng thái kết nối của từng nguồn (cache 60 giây) |
 | GET | `/api/health` | Kiểm tra backend (nhẹ, không gọi nguồn dữ liệu; dùng cho bot giám sát) |
 | GET | `/api/admin/stats?days=30` | Thống kê sử dụng; cần header `Authorization: Bearer <ADMIN_PASSWORD>` |
+| GET | `/api/admin/revenue?days=30` | Báo cáo doanh thu từ bảng đơn hàng (chỉ khi bật tài khoản); cần mật khẩu admin |
 | GET | `/api/me`, `/api/plans` | Trạng thái đăng nhập, hạn mức lượt tìm; giá và các gói |
 | POST | `/api/auth/register`, `/login`, `/logout`, `/change-password` | Tài khoản email + mật khẩu (chỉ khi bật `SESSION_SECRET`) |
 | POST | `/api/billing/checkout`, `/confirm`, `/sepay-webhook` | Tạo đơn chuyển khoản QR (SePay), kiểm tra trạng thái đơn, nhận webhook SePay để kích hoạt gói |
@@ -155,17 +156,20 @@ Hỗ trợ các loại: bài tạp chí, hội nghị, sách, chương sách, lu
 - **Xuất tài liệu tham khảo ra Word (.docx)**: dàn trang sẵn (Times New Roman 13, thụt dòng treo, giãn dòng 1,5) theo kiểu trích dẫn đang chọn. Văn bản trích dẫn là chữ thường, chưa có chữ nghiêng.
 - **Chuẩn hóa danh sách DOI**: dán DOI (hoặc cả đoạn tài liệu tham khảo, link doi.org) để lấy thông tin từng bài từ Crossref + OpenAlex rồi sao chép/xuất như kết quả tìm kiếm. DOI không có ở nguồn nào được liệt kê riêng; DOI tra lỗi tạm thời cũng báo riêng để thử lại.
 
-## Trang quản trị (thống kê sử dụng)
+## Trang quản trị (doanh thu và thống kê sử dụng)
 
-Đặt `ADMIN_PASSWORD` (tối thiểu 8 ký tự) trong `.env` rồi mở `/admin` (ví dụ http://localhost:5173/admin) để xem:
-- Số người dùng và số lượt tìm kiếm: hôm nay, 7 ngày, 30 ngày, toàn bộ; số lượt xuất file; số bài trung bình mỗi lượt tìm.
-- Biểu đồ và bảng theo ngày (thành công, lỗi, hủy), bảng theo nguồn (số lần dùng, tỷ lệ lỗi).
+Đặt `ADMIN_PASSWORD` (tối thiểu 8 ký tự) trong `.env` rồi mở `/admin` (ví dụ http://localhost:5173/admin). Trang có hai tab:
+- **Doanh thu** (khi bật tài khoản): doanh thu hôm nay, 7 ngày, tháng này, 30 ngày, toàn bộ; số đơn và giá trị trung bình mỗi đơn; biểu đồ theo ngày; số tài khoản, số người đã trả tiền, tỷ lệ chuyển đổi, người mua lại, số người đang dùng từng hạng; phễu đơn 30 ngày (tạo, đã trả, đang chờ, bỏ dở); doanh thu theo gói; 50 đơn gần nhất kèm email, trạng thái và mã giao dịch để đối soát. Số liệu dựng trực tiếp từ bảng đơn hàng nên luôn khớp dữ liệu thật; doanh thu tính theo ngày thanh toán (múi giờ `STATS_TIMEZONE`) và gói cấp thủ công không tính.
+- **Lượt sử dụng**: số người dùng và lượt tìm kiếm (hôm nay, 7 ngày, 30 ngày, toàn bộ), lượt xuất file, số bài trung bình mỗi lượt tìm; biểu đồ và bảng theo ngày; bảng theo nguồn (số lần dùng, tỷ lệ lỗi).
 
 Không đặt `ADMIN_PASSWORD` thì trang và API admin bị tắt (API trả 404). Đăng nhập sai quá 10 lần trong 15 phút sẽ bị chặn tạm thời.
 
-**Quyền riêng tư:** chỉ lưu số đếm theo ngày và mã băm HMAC một chiều của (IP + trình duyệt) để đếm người dùng khác nhau. **Không lưu địa chỉ IP, từ khóa hay nội dung tìm kiếm.** “Người dùng” là thiết bị/mạng khác nhau nên có thể lệch nếu một người dùng nhiều thiết bị hoặc nhiều người chung một mạng. Các lần ping `/api/health` của bot giám sát không bị tính.
+**Quyền riêng tư:** thống kê sử dụng chỉ lưu số đếm theo ngày và mã băm HMAC một chiều của (IP + trình duyệt) để đếm người dùng khác nhau. **Không lưu địa chỉ IP, từ khóa hay nội dung tìm kiếm.** “Người dùng” là thiết bị/mạng khác nhau nên có thể lệch nếu một người dùng nhiều thiết bị hoặc nhiều người chung một mạng. Các lần ping `/api/health` của bot giám sát không bị tính.
 
-**Lưu trữ:** số liệu ghi vào `STATS_FILE` (mặc định `server/data/stats.json`, đã được `.gitignore`), giữ `STATS_RETENTION_DAYS` ngày (mặc định 365). Máy chủ có ổ đĩa tạm (ví dụ Render gói Free) sẽ **mất số liệu khi khởi động lại hoặc deploy lại**; với Docker hãy dùng volume (đã cấu hình sẵn trong `docker-compose.yml`).
+**Lưu trữ thống kê sử dụng:**
+- Có `DATABASE_URL`: lưu trong PostgreSQL (bảng `pf_stats_days` và `pf_stats_meta`, tự tạo), **không mất khi khởi động lại hay deploy lại**. Ứng dụng ghi các ngày có thay đổi mỗi 30 giây và khi tắt máy chủ, nên khi bị tắt đột ngột có thể mất tối đa khoảng 30 giây số đếm. Khi deploy, bản cũ và bản mới có thể chạy chồng nhau vài phút; số đếm trong khoảng đó có thể bị ghi đè lẫn nhau.
+- Không có `DATABASE_URL`: ghi vào `STATS_FILE` (mặc định `server/data/stats.json`, đã được `.gitignore`). Máy chủ có ổ đĩa tạm (ví dụ Render gói Free) sẽ **mất số liệu khi khởi động lại hoặc deploy lại**; với Docker hãy dùng volume (đã cấu hình sẵn trong `docker-compose.yml`).
+- Giữ `STATS_RETENTION_DAYS` ngày (mặc định 365). Số liệu đang nằm trong file cũ **không tự chuyển** sang cơ sở dữ liệu khi bạn bật `DATABASE_URL`; bảng thống kê bắt đầu từ đầu.
 
 ## Cách xử lý dữ liệu
 

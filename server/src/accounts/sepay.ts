@@ -8,14 +8,30 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 export interface SepayConfig {
   /** Khóa xác thực webhook: SePay gửi header `Authorization: Apikey <khóa>`. */
   apiKey: string;
-  /** Số tài khoản ngân hàng nhận tiền (đã liên kết với SePay). */
+  /**
+   * Số tài khoản khách chuyển tiền tới, hiện trên mã QR. Với ngân hàng bắt buộc dùng tài khoản ảo (VA) như BIDV, đây là số VA
+   * (có thể gồm cả chữ, vd. 96247NJ49C) vì SePay chỉ nhận thông báo khi tiền vào đúng VA.
+   */
   accountNumber: string;
+  /** Các số khác cũng được chấp nhận là tài khoản nhận (vd. số tài khoản chính khi `accountNumber` là VA). */
+  accountAliases?: string[];
   /** Tên ngân hàng theo danh sách của SePay/VietQR, vd. MBBank, Vietcombank, ACB. */
   bankName: string;
   /** Tên chủ tài khoản, chỉ để hiển thị cho khách đối chiếu. */
   accountName?: string;
   /** Tiền tố mã thanh toán; phải trùng cấu hình "Cấu trúc mã thanh toán" trong SePay. Mặc định PF. */
   codePrefix: string;
+}
+
+/** Chuẩn hóa số tài khoản để so sánh: bỏ khoảng trắng và ký tự lạ, chữ hoa (VA của một số ngân hàng có chữ cái). */
+export const normalizeAccount = (value: string | undefined): string => (value ?? '').replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+
+/** Giao dịch có vào đúng tài khoản nhận cấu hình không: so cả số tài khoản lẫn tài khoản phụ/VA SePay gửi kèm. Không có thông tin tài khoản thì không từ chối. */
+export function isOurAccount(config: SepayConfig, tx: { accountNumber: string; subAccount?: string }): boolean {
+  const reported = [tx.accountNumber, tx.subAccount].map(normalizeAccount).filter(Boolean);
+  if (reported.length === 0) return true;
+  const ours = new Set([config.accountNumber, ...(config.accountAliases ?? [])].map(normalizeAccount));
+  return reported.some((account) => ours.has(account));
 }
 
 /** Nội dung chuyển khoản của một đơn, chỉ chữ và số vì nhiều ngân hàng bỏ ký tự đặc biệt: "PF" + mã đơn. */
@@ -65,6 +81,8 @@ export interface SepayTransaction {
   direction: 'in' | 'out';
   amount: number;
   accountNumber: string;
+  /** Tài khoản phụ / tài khoản ảo (VA) mà SePay báo kèm, nếu có. */
+  subAccount?: string;
   code?: string;
   content: string;
   referenceCode?: string;
@@ -85,6 +103,7 @@ export function parseSepayPayload(body: unknown): SepayTransaction | null {
     direction: type,
     amount,
     accountNumber: str(b.accountNumber),
+    subAccount: str(b.subAccount) || undefined,
     code: str(b.code) || undefined,
     content: [str(b.content), str(b.description)].filter(Boolean).join(' '),
     referenceCode: str(b.referenceCode) || undefined,

@@ -39,5 +39,7 @@ services:
         sync: false
       - key: SEPAY_ACCOUNT_NAME
         sync: false
+      - key: SEPAY_ACCOUNT_ALIASES
+        sync: false
       - key: SEPAY_CODE_PREFIX
         value: PF

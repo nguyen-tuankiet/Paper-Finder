@@ -7,12 +7,16 @@ import type { Logger } from '../logger.js';
 import { adminGrantSchema, changePasswordSchema, checkoutSchema, confirmPaymentSchema, loginSchema, registerSchema, saveLibrarySchema } from '../schemas.js';
 import { BillingError } from './billing.js';
 import { callerFrom, callerOf, currentSession, currentUser, toAccountUser, type AccountsContext } from './context.js';
+import { buildRevenueReport } from './revenue.js';
 import { burnPasswordCheck, hashPassword, verifyPassword } from './passwords.js';
 import { parseSepayPayload, verifyApiKey } from './sepay.js';
 import { SESSION_TTL_MS, clearedSessionCookie, sessionCookie } from './session.js';
 import type { UserRow } from './types.js';
 
 const MAX_SAVED_RECORD_BYTES = 40_000;
+
+/** Chỉ giữ 4 ký tự cuối của số tài khoản khi ghi log (đủ để đối chiếu, không lộ cả số). */
+const tail = (value: string | undefined) => (value ? `…${value.slice(-4)}` : undefined);
 
 export interface AccountRouteDeps {
   ctx: AccountsContext;
@@ -261,7 +265,7 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
       if (outcome.result === 'activated') logger.info('payment_activated', { orderCode: outcome.orderCode, ref: tx.id, amount: tx.amount });
       else if (outcome.result !== 'ignored' && outcome.result !== 'duplicate') {
         // Tiền đã vào nhưng chưa kích hoạt được: cần bạn đối soát tay (cấp gói bằng lệnh admin).
-        logger.warn('payment_needs_attention', { result: outcome.result, orderCode: 'orderCode' in outcome ? outcome.orderCode : undefined, ref: tx.id, amount: tx.amount, content: tx.content.slice(0, 120) });
+        logger.warn('payment_needs_attention', { result: outcome.result, orderCode: 'orderCode' in outcome ? outcome.orderCode : undefined, ref: tx.id, amount: tx.amount, content: tx.content.slice(0, 120), account: tail(tx.accountNumber), subAccount: tail(tx.subAccount) });
       }
       res.json({ success: true });
     }),
@@ -365,6 +369,18 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
     adminOnly,
     wrap(async (_req, res) => {
       res.json(await ctx.store.counts(ctx.now()));
+    }),
+  );
+
+  // Báo cáo doanh thu: dựng từ bảng đơn hàng nên luôn khớp với dữ liệu thật, không phải bộ đếm riêng.
+  app.get(
+    '/api/admin/revenue',
+    adminLimiter,
+    adminOnly,
+    wrap(async (req, res) => {
+      const days = Number(req.query.days);
+      const [orders, counts] = await Promise.all([ctx.store.listOrders(20_000), ctx.store.counts(ctx.now())]);
+      res.json(buildRevenueReport(orders, counts, { now: ctx.now(), timezone: ctx.timezone, days: Number.isFinite(days) && days > 0 ? days : 30 }));
     }),
   );
 

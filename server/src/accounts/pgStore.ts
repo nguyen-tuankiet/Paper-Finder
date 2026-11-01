@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import type { HistoryEntry, LibraryItem, PaidTier, PaperRecord, SearchRequest } from '../../../shared/types.js';
 import { PERIOD_DAYS, applyPurchase, parsePlanKey, tierOf, type PlanKey } from './plans.js';
-import type { AccountCounts, AccountStore, OrderRow, OrderStatus, SaveToLibraryResult, UserRow } from './types.js';
+import type { AccountCounts, AccountStore, OrderRow, OrderStatus, OrderWithEmail, SaveToLibraryResult, UserRow } from './types.js';
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 const iso = (value: Date | string | null): string | null => (value === null ? null : new Date(value).toISOString());
@@ -99,7 +99,7 @@ const toOrder = (r: OrderDbRow): OrderRow => ({
 export class PgAccountStore implements AccountStore {
   readonly kind = 'postgres' as const;
 
-  private constructor(private readonly pool: pg.Pool) {}
+  private constructor(readonly pool: pg.Pool) {}
 
   /** `pool` truyền vào để thử nghiệm; bình thường dùng `connect(url)`. */
   static async withPool(pool: pg.Pool): Promise<PgAccountStore> {
@@ -217,6 +217,14 @@ export class PgAccountStore implements AccountStore {
     } finally {
       client.release();
     }
+  }
+
+  async listOrders(limit: number): Promise<OrderWithEmail[]> {
+    const result = await this.pool.query<OrderDbRow & { email: string | null }>(
+      'SELECT o.*, u.email AS email FROM pf_orders o LEFT JOIN pf_users u ON u.id = o.user_id ORDER BY o.created_at DESC LIMIT $1',
+      [limit],
+    );
+    return result.rows.map((r) => ({ ...toOrder(r), email: r.email ?? null }));
   }
 
   async counts(now: Date): Promise<AccountCounts> {

@@ -29,6 +29,11 @@ export interface OrderRow {
   paymentRef: string | null;
 }
 
+/** Đơn kèm email người đặt (null nếu tài khoản không còn) để trang quản trị hiển thị. */
+export interface OrderWithEmail extends OrderRow {
+  email: string | null;
+}
+
 export type SaveToLibraryResult = 'saved' | 'exists' | 'full';
 
 export interface AccountCounts {
@@ -65,6 +70,8 @@ export interface AccountStore {
    */
   settleOrder(orderCode: number, now: Date, paymentRef?: string): Promise<{ order: OrderRow; user: UserRow; activated: boolean } | null>;
   counts(now: Date): Promise<AccountCounts>;
+  /** Các đơn mới nhất trước, tối đa `limit` đơn, kèm email người đặt (dùng cho báo cáo doanh thu). */
+  listOrders(limit: number): Promise<OrderWithEmail[]>;
 
   listLibrary(userId: string): Promise<LibraryItem[]>;
   saveToLibrary(userId: string, item: LibraryItem, maxItems: number): Promise<SaveToLibraryResult>;

@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { PAID_TIERS, PLAN_PERIODS, type CheckoutResponse, type PaidTier, type PaymentStatusResponse, type PlanOption, type PlanPeriod } from '../../../shared/types.js';
 import { PERIOD_DAYS, PERIOD_LABEL, parsePlanKey, planKey, type PlanKey } from './plans.js';
-import { memoFor, qrUrl, extractOrderCode, type SepayConfig, type SepayTransaction } from './sepay.js';
+import { isOurAccount, memoFor, qrUrl, extractOrderCode, type SepayConfig, type SepayTransaction } from './sepay.js';
 import type { AccountStore, OrderRow, UserRow } from './types.js';
 
 /** Đơn chưa thanh toán được coi là hết hạn sau chừng này (chỉ để hiển thị; tiền về muộn vẫn được kích hoạt). */
@@ -102,8 +102,7 @@ export class BillingService {
     const order = await store.getOrder(orderCode);
     if (!order || !parsePlanKey(order.plan)) return { result: 'unmatched' };
 
-    const digits = (value: string) => value.replace(/\D/g, '');
-    if (tx.accountNumber && digits(tx.accountNumber) !== digits(sepay.accountNumber)) return { result: 'wrong_account', orderCode };
+    if (!isOurAccount(sepay, tx)) return { result: 'wrong_account', orderCode };
     if (order.status === 'paid') return { result: 'duplicate', orderCode };
     if (tx.amount < order.amount) return { result: 'underpaid', orderCode };
 

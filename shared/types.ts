@@ -309,8 +309,10 @@ export interface UsageReport {
   timezone: string;
   /** Thời điểm bắt đầu ghi thống kê. */
   trackingSince: string;
-  /** Có ghi ra file để giữ lại sau khi khởi động lại hay không. */
+  /** Có lưu bền để giữ lại sau khi khởi động lại hay không (cơ sở dữ liệu hoặc file). */
   persistent: boolean;
+  /** Nơi lưu thống kê: cơ sở dữ liệu (bền), file trên máy chủ (mất nếu ổ đĩa tạm) hoặc chỉ bộ nhớ. */
+  storage: 'database' | 'file' | 'memory';
   retentionDays: number;
   today: UsageWindow;
   last7Days: UsageWindow;
@@ -319,4 +321,63 @@ export interface UsageReport {
   allTime: UsageWindow & { completed: number; failed: number; cancelled: number; averageResultsPerSearch: number };
   daily: UsageDay[];
   sources: UsageSourceRow[];
+}
+
+// ---------- Doanh thu (trang admin) ----------
+
+export type AdminOrderStatus = 'pending' | 'paid' | 'cancelled';
+
+export interface RevenueWindow {
+  revenueVnd: number;
+  orders: number;
+}
+
+export interface RevenueDay extends RevenueWindow {
+  /** Ngày theo múi giờ cấu hình, dạng YYYY-MM-DD. */
+  date: string;
+}
+
+export interface RevenuePlanRow extends RevenueWindow {
+  tier: PaidTier;
+  period: PlanPeriod;
+}
+
+export interface AdminOrder {
+  orderCode: number;
+  /** Email tài khoản đã đặt đơn (null nếu tài khoản đã bị xóa). */
+  email: string | null;
+  plan: string;
+  amount: number;
+  status: AdminOrderStatus;
+  createdAt: string;
+  paidAt: string | null;
+  /** Mã giao dịch ngân hàng/SePay đã thanh toán đơn, để đối soát. */
+  paymentRef: string | null;
+}
+
+export interface RevenueReport {
+  generatedAt: string;
+  timezone: string;
+  today: RevenueWindow;
+  last7Days: RevenueWindow;
+  last30Days: RevenueWindow;
+  /** Từ ngày 1 của tháng hiện tại. */
+  thisMonth: RevenueWindow;
+  allTime: RevenueWindow;
+  /** Giá trị trung bình mỗi đơn đã thanh toán (0 nếu chưa có). */
+  averageOrderVnd: number;
+  users: number;
+  activeStandard: number;
+  activePro: number;
+  /** Số tài khoản đã từng thanh toán ít nhất một đơn. */
+  payingUsers: number;
+  /** Số tài khoản đã thanh toán từ hai đơn trở lên. */
+  repeatBuyers: number;
+  /** Tỷ lệ tài khoản từng trả tiền trên tổng tài khoản (%), một chữ số thập phân. */
+  conversionPercent: number;
+  /** Đơn tạo trong 30 ngày gần nhất: bao nhiêu đã trả, còn chờ (dưới 24 giờ), bỏ dở/quá hạn. */
+  funnel: { created: number; paid: number; pending: number; abandoned: number };
+  daily: RevenueDay[];
+  byPlan: RevenuePlanRow[];
+  recentOrders: AdminOrder[];
 }

@@ -14,6 +14,7 @@ import type {
   SearchRequest,
   SearchResult,
   SourceHealth,
+  RevenueReport,
   UsageReport,
 } from '../../../shared/types';
 import { pdfFileName, toExportPayload } from './records';
@@ -120,6 +121,13 @@ export async function fetchUsageReport(password: string, days: number, signal?: 
   const response = await request(`/api/admin/stats?days=${days}`, { headers: { authorization: `Bearer ${password}` }, signal });
   if (!response.ok) throw new ApiError(await readHttpError(response), 'http', response.status);
   return (await response.json()) as UsageReport;
+}
+
+/** Báo cáo doanh thu cho trang admin. 404 = chưa bật tài khoản/thanh toán trên máy chủ. */
+export async function fetchRevenueReport(password: string, days: number, signal?: AbortSignal): Promise<RevenueReport> {
+  const response = await request(`/api/admin/revenue?days=${days}`, { headers: { authorization: `Bearer ${password}` }, signal });
+  if (!response.ok) throw new ApiError(await readHttpError(response), 'http', response.status);
+  return (await response.json()) as RevenueReport;
 }
 
 /** Yêu cầu backend tạo file rồi tải về bằng tên file `fileName`. Ném ApiError có `code` 'unauthorized' / 'pro_required' với BibTeX/RIS. */

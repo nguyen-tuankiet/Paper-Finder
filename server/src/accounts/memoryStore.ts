@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { HistoryEntry, LibraryItem, PaidTier } from '../../../shared/types.js';
 import { silentLogger, type Logger } from '../logger.js';
 import { PERIOD_DAYS, applyPurchase, parsePlanKey, tierOf } from './plans.js';
-import type { AccountCounts, AccountStore, OrderRow, SaveToLibraryResult, UserRow } from './types.js';
+import type { AccountCounts, AccountStore, OrderRow, OrderWithEmail, SaveToLibraryResult, UserRow } from './types.js';
 
 interface Snapshot {
   version: 1;
@@ -135,6 +135,13 @@ export class MemoryAccountStore implements AccountStore {
     Object.assign(user, applyPurchase(user, plan.tier, PERIOD_DAYS[plan.period], now));
     this.touch();
     return { order: { ...order }, user: { ...user }, activated: true };
+  }
+
+  async listOrders(limit: number): Promise<OrderWithEmail[]> {
+    return [...this.orders.values()]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit)
+      .map((o) => ({ ...o, email: this.users.get(o.userId)?.email ?? null }));
   }
 
   async counts(now: Date): Promise<AccountCounts> {

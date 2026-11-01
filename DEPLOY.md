@@ -63,9 +63,9 @@ Gói Free của Render ngủ sau 15 phút không có truy cập và mất khoả
 
 ## 5. Trang quản trị `/admin` và giới hạn của gói Free
 
-Mở `https://<địa-chỉ>/admin`, nhập `ADMIN_PASSWORD` để xem số người dùng và số lượt tìm.
+Mở `https://<địa-chỉ>/admin`, nhập `ADMIN_PASSWORD`: tab **Doanh thu** (doanh thu theo ngày/tháng, đơn hàng gần đây, tỷ lệ chuyển đổi; cần bật tài khoản) và tab **Lượt sử dụng** (số người dùng, lượt tìm).
 
-**Quan trọng:** thống kê được ghi vào một file trên ổ đĩa của máy chủ. Gói Free của Render dùng ổ đĩa tạm, nên **số liệu bị xóa mỗi khi dịch vụ khởi động lại hoặc deploy lại** (Render có thể khởi động lại dịch vụ bất cứ lúc nào, và mỗi lần bạn `git push` cũng deploy lại). Hãy xem số liệu như "từ lần khởi động gần nhất". Muốn giữ lâu dài cần ổ đĩa bền (gói trả phí của Render có Persistent Disk) hoặc lưu thống kê ra một dịch vụ bên ngoài; hiện ứng dụng chưa hỗ trợ cách thứ hai.
+**Lưu trữ:** nếu bạn đã đặt `DATABASE_URL` (mục 7.1) thì thống kê được lưu vào cùng PostgreSQL đó và **không mất khi khởi động lại hay deploy lại**; trang admin hiện thông báo màu xanh "lưu trong cơ sở dữ liệu". Nếu chưa có `DATABASE_URL`, thống kê ghi vào file trên ổ đĩa máy chủ; gói Free của Render dùng ổ đĩa tạm nên **số liệu bị xóa mỗi lần khởi động lại hoặc deploy lại** (trang admin hiện cảnh báo vàng). Số liệu cũ trong file không tự chuyển vào cơ sở dữ liệu. Doanh thu luôn lấy từ bảng đơn hàng nên chỉ cần có `DATABASE_URL` là bền.
 
 ## 6. Cập nhật sau này
 
@@ -126,8 +126,9 @@ Cài đặt:
 1. Đăng ký [sepay.vn](https://sepay.vn), **liên kết tài khoản ngân hàng** nhận tiền (làm theo hướng dẫn của SePay cho ngân hàng của bạn).
 2. Trên SePay: **Tích hợp → Webhooks → Thêm webhook**. Điền: URL gọi = `https://<địa-chỉ>/api/billing/sepay-webhook`; sự kiện = **có tiền vào**; kiểu chứng thực = **API Key**, giá trị là chuỗi bí mật bạn tự đặt (>= 8 ký tự).
 3. Trên SePay: **Cấu hình công ty → Cấu trúc mã thanh toán**, đặt tiền tố trùng `SEPAY_CODE_PREFIX` (mặc định `PF`).
-4. Trên Render thêm: `SEPAY_API_KEY` (đúng chuỗi ở bước 2), `SEPAY_BANK_ACCOUNT` (số tài khoản nhận), `SEPAY_BANK_NAME` (tên ngân hàng theo VietQR, vd. `MBBank`, `Vietcombank`, `ACB`; xem danh sách ở qr.sepay.vn), tùy chọn `SEPAY_ACCOUNT_NAME` (tên chủ tài khoản hiển thị) và `SEPAY_CODE_PREFIX`. Thiếu một trong ba biến đầu thì nút thanh toán bị tắt.
-5. **Thử trước khi bán:** đặt tạm `PRICE_STANDARD_WEEK=2000`, mua một đơn và chuyển khoản thật số tiền đó, kiểm tra hạng tự bật, rồi trả giá về như cũ.
+4. Trên Render thêm: `SEPAY_API_KEY` (đúng chuỗi ở bước 2), `SEPAY_BANK_ACCOUNT` (số tài khoản nhận; **BIDV và vài ngân hàng khác phải dùng số VA, xem bên dưới**), `SEPAY_BANK_NAME` (tên ngân hàng theo VietQR, vd. `MBBank`, `Vietcombank`, `ACB`; xem danh sách ở qr.sepay.vn), tùy chọn `SEPAY_ACCOUNT_NAME` (tên chủ tài khoản hiển thị) và `SEPAY_CODE_PREFIX`. Thiếu một trong ba biến đầu thì nút thanh toán bị tắt.
+5. **Ngân hàng dùng tài khoản ảo (VA), điển hình là BIDV:** SePay chỉ nhận được thông báo khi tiền chuyển vào **đúng VA** (mở my.sepay.vn → Ngân hàng → chọn tài khoản → mục Tài khoản ảo → Xem chi tiết, xem dòng "Tài khoản nhận thanh toán"). Chuyển thẳng vào số tài khoản chính thì SePay không biết nên webhook không bao giờ được gọi. Khi đó đặt `SEPAY_BANK_ACCOUNT` = số **VA** (có thể có chữ cái, vd. `96247NJ49C`; mã QR sẽ dùng số này) và `SEPAY_ACCOUNT_ALIASES` = số tài khoản chính (nhiều số cách nhau bằng dấu phẩy), vì SePay có thể báo giao dịch theo số chính hoặc theo VA; ứng dụng chấp nhận cả hai. Giao dịch bị từ chối vì lệch tài khoản được ghi log `payment_needs_attention` kèm 4 ký tự cuối của số tài khoản SePay đã báo để bạn thêm vào `SEPAY_ACCOUNT_ALIASES`.
+6. **Thử trước khi bán:** đặt tạm `PRICE_STANDARD_WEEK=2000`, mua một đơn và chuyển khoản thật số tiền đó, kiểm tra hạng tự bật, rồi trả giá về như cũ.
 
 **Thử ở máy local, không cần tiền thật:** thêm vào `.env` giá trị bất kỳ cho `SEPAY_API_KEY`, `SEPAY_BANK_ACCOUNT`, `SEPAY_BANK_NAME`, chạy `npm run dev`, đăng ký tài khoản, bấm mua để hiện mã QR, rồi ở cửa sổ lệnh khác chạy:
 
@@ -139,7 +140,7 @@ Trang thanh toán sẽ tự chuyển sang "Thanh toán thành công". Thử thê
 
 Đối soát: khoản tiền vào **không khớp đơn nào** (sai nội dung, thiếu tiền, lệch tài khoản) được ghi log mức cảnh báo `payment_needs_attention` kèm mã giao dịch; hãy xem log định kỳ và cấp gói thủ công (mục 7.4) hoặc hoàn tiền. Giao diện SePay cũng liệt kê mọi giao dịch để đối chiếu.
 
-> Phần SePay được viết theo tài liệu webhook công khai của SePay và kiểm thử bằng giao dịch giả lập (đúng định dạng payload) trong mã nguồn, **chưa được thử với SePay thật**. Hãy làm bước thử ở mục 7.3.5 và xem log `payment_needs_attention` nếu đơn không tự kích hoạt.
+> Phần SePay được viết theo tài liệu webhook công khai của SePay và kiểm thử bằng giao dịch giả lập (đúng định dạng payload) trong mã nguồn, **chưa được thử với SePay thật**. Hãy làm bước thử ở mục 7.3.5 và xem log `payment_needs_attention` nếu đơn không tự kích hoạt. Khi thử, phải **quét mã QR trên trang** (hoặc chuyển vào đúng số hiện trên trang); chuyển vào số khác thì SePay không báo về.
 
 ### 7.4. Cấp gói thủ công và xem thống kê tài khoản
 
