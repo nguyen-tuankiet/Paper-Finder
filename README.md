@@ -86,6 +86,7 @@ npm start                   # backend phục vụ luôn web/dist tại http://lo
 | POST | `/api/auth/register`, `/login`, `/logout`, `/change-password` | Tài khoản email + mật khẩu (chỉ khi bật `SESSION_SECRET`) |
 | POST | `/api/billing/checkout`, `/confirm`, `/sepay-webhook` | Tạo đơn chuyển khoản QR (SePay), kiểm tra trạng thái đơn, nhận webhook SePay để kích hoạt gói |
 | GET/POST/DELETE | `/api/library`, `/api/history` | Thư viện cá nhân và lịch sử tìm kiếm (từ hạng Tiêu chuẩn) |
+| POST | `/api/auth/forgot`, `/api/auth/reset` | Quên mật khẩu: gửi liên kết đặt lại qua email (hiệu lực 1 giờ, dùng một lần) và đặt mật khẩu mới |
 | POST | `/api/admin/grant`, GET `/api/admin/accounts` | Cấp gói thủ công và thống kê tài khoản (cần mật khẩu admin) |
 
 Ví dụ yêu cầu tìm kiếm:

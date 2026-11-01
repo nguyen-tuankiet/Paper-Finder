@@ -188,6 +188,8 @@ export const fetchMe = (signal?: AbortSignal) => json<MeResponse>('/api/me', { s
 export const fetchPlans = (signal?: AbortSignal) => json<PlansResponse>('/api/plans', { signal });
 export const registerAccount = (email: string, password: string) => post<{ user: AccountUser }>('/api/auth/register', { email, password });
 export const loginAccount = (email: string, password: string) => post<{ user: AccountUser }>('/api/auth/login', { email, password });
+export const requestPasswordReset = (email: string) => post<{ ok: true }>('/api/auth/forgot', { email });
+export const resetPasswordWithToken = (token: string, password: string) => post<{ user: AccountUser }>('/api/auth/reset', { token, password });
 export const logoutAccount = () => post<{ ok: true }>('/api/auth/logout', {});
 export const changePassword = (currentPassword: string, newPassword: string) => post<{ ok: true }>('/api/auth/change-password', { currentPassword, newPassword });
 export const startCheckout = (tier: PaidTier, period: PlanPeriod) => post<CheckoutResponse>('/api/billing/checkout', { tier, period });

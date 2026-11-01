@@ -94,6 +94,8 @@ const password = z.string().min(8, 'Mật khẩu cần ít nhất 8 ký tự.').
 export const registerSchema = z.object({ email, password }).strict();
 export const loginSchema = z.object({ email, password: z.string().min(1).max(200) }).strict();
 export const changePasswordSchema = z.object({ currentPassword: z.string().min(1).max(200), newPassword: password }).strict();
+export const forgotPasswordSchema = z.object({ email }).strict();
+export const resetPasswordSchema = z.object({ token: z.string().min(20).max(600), password }).strict();
 export const checkoutSchema = z.object({ tier: z.enum(PAID_TIERS), period: z.enum(PLAN_PERIODS) }).strict();
 export const confirmPaymentSchema = z.object({ orderCode: z.number().int().positive() }).strict();
 

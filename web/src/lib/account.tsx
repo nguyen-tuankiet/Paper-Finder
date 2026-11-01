@@ -3,7 +3,7 @@ import type { AccountUser, Entitlements, PaidTier, PlansResponse, QuotaInfo, Tie
 import { AuthModal, type AuthTab } from '../components/AuthModal';
 import { UpgradeModal } from '../components/UpgradeModal';
 import { AccountContext, UNRESTRICTED, type AccountApi } from './accountContext';
-import { fetchMe, fetchPlans, loginAccount, logoutAccount, registerAccount } from './api';
+import { fetchMe, fetchPlans, loginAccount, logoutAccount, registerAccount, resetPasswordWithToken } from './api';
 
 const UNLIMITED: QuotaInfo = { limit: null, used: 0, remaining: null, resetsAt: null };
 
@@ -11,6 +11,17 @@ const UNLIMITED: QuotaInfo = { limit: null, used: 0, remaining: null, resetsAt: 
 export function AccountProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [enabled, setEnabled] = useState(false);
+  const [passwordResetEnabled, setPasswordResetEnabled] = useState(false);
+  // Liên kết trong email có dạng /?reset=<token>: lấy token rồi xóa khỏi thanh địa chỉ ngay (không để lộ trong lịch sử trình duyệt hay khi chia sẻ).
+  const [resetToken, setResetToken] = useState<string | null>(() => {
+    try {
+      const token = new URLSearchParams(window.location.search).get('reset');
+      if (token) window.history.replaceState(null, '', window.location.pathname);
+      return token;
+    } catch {
+      return null;
+    }
+  });
   const [user, setUser] = useState<AccountUser | null>(null);
   const [tier, setTier] = useState<Tier>('guest');
   const [entitlements, setEntitlements] = useState<Entitlements>(UNRESTRICTED);
@@ -23,6 +34,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     try {
       const me = await fetchMe();
       setEnabled(me.accountsEnabled);
+      setPasswordResetEnabled(me.passwordResetEnabled);
       setUser(me.user);
       setTier(me.tier);
       setEntitlements(me.entitlements);
@@ -40,6 +52,25 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       .then(setPlans)
       .catch(() => undefined);
   }, [refresh]);
+
+  // Mở liên kết đặt lại mật khẩu: hiện luôn hộp thoại nhập mật khẩu mới.
+  const [resetShown, setResetShown] = useState(false);
+  useEffect(() => {
+    if (ready && enabled && resetToken && !resetShown) {
+      setResetShown(true);
+      setAuth({ open: true, tab: 'reset' });
+    }
+  }, [ready, enabled, resetToken, resetShown]);
+
+  const resetPassword = useCallback(
+    async (password: string) => {
+      if (!resetToken) throw new Error('Liên kết đặt lại mật khẩu không hợp lệ. Hãy yêu cầu liên kết mới.');
+      await resetPasswordWithToken(resetToken, password);
+      setResetToken(null);
+      await refresh();
+    },
+    [resetToken, refresh],
+  );
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -67,6 +98,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     () => ({
       ready,
       enabled,
+      passwordResetEnabled,
       user,
       tier,
       entitlements,
@@ -75,11 +107,12 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       refresh,
       login,
       register,
+      resetPassword,
       logout,
       openAuth: (tab = 'login') => setAuth({ open: true, tab }),
       openUpgrade: (reason, wanted) => setUpgrade({ open: true, reason, tier: wanted }),
     }),
-    [ready, enabled, user, tier, entitlements, quota, plans, refresh, login, register, logout],
+    [ready, enabled, passwordResetEnabled, user, tier, entitlements, quota, plans, refresh, login, register, resetPassword, logout],
   );
 
   return (

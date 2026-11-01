@@ -6,8 +6,6 @@ import { DoiLookupPanel } from './components/DoiLookupPanel';
 import { ModeTabs, type SearchMode } from './components/ModeTabs';
 import type { LookupResponse } from './lib/api';
 import { AppFooter } from './components/AppFooter';
-import { HistoryDrawer } from './components/HistoryDrawer';
-import { LibraryDrawer } from './components/LibraryDrawer';
 import { QuotaBar } from './components/QuotaBar';
 import { useAccount } from './lib/accountContext';
 import { DetailDrawer } from './components/DetailDrawer';
@@ -20,6 +18,7 @@ import { SearchForm } from './components/SearchForm';
 import { EmptyState, NoResults, SearchProgress, SourceAlerts } from './components/SearchStatus';
 import { StatsBar } from './components/StatsBar';
 import { useOnlineStatus, useSearch, useSourceHealth } from './lib/hooks';
+import { clearRerun, peekRerun } from './lib/rerun';
 import { useCitationStyle, useCustomCitation } from './lib/citationStyle';
 import { DEFAULT_FILTERS, DEFAULT_SOURCES, filterRecords, type ResultFilters } from './lib/records';
 
@@ -111,8 +110,8 @@ export default function App() {
   const [lastRequest, setLastRequest] = useState<SearchRequest | null>(null);
   const [lookup, setLookup] = useState<LookupResponse | null>(null);
   const [mode, setMode] = useState<SearchMode>('search');
-  const [libraryOpen, setLibraryOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  // Lần tìm được chuyển từ trang Lịch sử (nút "Tìm lại"): chạy ngay khi trang mở.
+  const [rerun] = useState(peekRerun);
   const available = health.status === 'ready' ? health.sources.map((s) => s.source) : DEFAULT_SOURCES;
 
   const run = (request: SearchRequest) => {
@@ -122,6 +121,18 @@ export default function App() {
   };
 
   const searching = search.phase === 'searching';
+
+  // Hẹn giờ ngắn để chế độ StrictMode (mount, hủy, mount lại) không chạy hai lần hoặc hủy mất lần tìm vừa bắt đầu.
+  useEffect(() => {
+    if (!rerun) return;
+    const timer = window.setTimeout(() => {
+      clearRerun();
+      run(rerun);
+    }, 50);
+    return () => window.clearTimeout(timer);
+    // chỉ chạy một lần khi mở trang
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rerun]);
 
   // Mỗi lần tìm xong (hoặc bị từ chối/hủy) cập nhật số lượt còn lại.
   const { refresh } = account;
@@ -147,7 +158,7 @@ export default function App() {
 
   return (
     <Layout className="pf-layout">
-      <Header health={health} online={online} account={<AccountMenu onOpenLibrary={() => setLibraryOpen(true)} onOpenHistory={() => setHistoryOpen(true)} />} />
+      <Header health={health} online={online} account={<AccountMenu />} />
       <Layout.Content className="pf-main pf-main-overlap">
         {!online && <Alert type="warning" showIcon title="Bạn đang offline" description="Không thể tìm kiếm hoặc xuất file cho tới khi có mạng trở lại. Kết quả đã tải vẫn xem được." />}
         <QuotaBar />
@@ -185,8 +196,6 @@ export default function App() {
         )}
       </Layout.Content>
       <AppFooter />
-      <LibraryDrawer open={libraryOpen} onClose={() => setLibraryOpen(false)} />
-      <HistoryDrawer open={historyOpen} onClose={() => setHistoryOpen(false)} onRerun={run} />
       <ProductPopup />
       <FloatButton.BackTop className="pf-backtop" visibilityHeight={600} tooltip="Lên đầu trang" />
     </Layout>

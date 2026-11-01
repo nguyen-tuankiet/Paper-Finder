@@ -4,11 +4,6 @@ import { useState } from 'react';
 import { useAccount } from '../lib/accountContext';
 import { changePassword } from '../lib/api';
 
-interface Props {
-  onOpenLibrary: () => void;
-  onOpenHistory: () => void;
-}
-
 function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const account = useAccount();
   const [form] = Form.useForm<{ currentPassword: string; newPassword: string }>();
@@ -52,8 +47,8 @@ function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => 
   );
 }
 
-/** Nút đăng nhập, hoặc menu tài khoản (thư viện, lịch sử, nâng cấp, đổi mật khẩu, đăng xuất). Ẩn khi máy chủ tắt tính năng tài khoản. */
-export function AccountMenu({ onOpenLibrary, onOpenHistory }: Props) {
+/** Nút đăng nhập, hoặc menu tài khoản (thư viện và lịch sử mở ở trang riêng, nâng cấp, đổi mật khẩu, đăng xuất). Ẩn khi máy chủ tắt tính năng tài khoản. */
+export function AccountMenu() {
   const account = useAccount();
   const [passwordOpen, setPasswordOpen] = useState(false);
   if (!account.enabled) return null;
@@ -80,8 +75,8 @@ export function AccountMenu({ onOpenLibrary, onOpenHistory }: Props) {
       ),
     },
     { type: 'divider' },
-    { key: 'library', icon: <BookOutlined />, label: 'Thư viện của tôi', onClick: onOpenLibrary },
-    { key: 'history', icon: <HistoryOutlined />, label: 'Lịch sử tìm kiếm', onClick: onOpenHistory },
+    { key: 'library', icon: <BookOutlined />, label: 'Thư viện của tôi', onClick: () => window.location.assign('/thu-vien') },
+    { key: 'history', icon: <HistoryOutlined />, label: 'Lịch sử tìm kiếm', onClick: () => window.location.assign('/lich-su') },
     { key: 'upgrade', icon: <CrownFilled style={{ color: '#d4a017' }} />, label: paidUntil ? 'Gia hạn / đổi gói' : 'Mua gói', onClick: () => account.openUpgrade() },
     { type: 'divider' },
     { key: 'password', icon: <KeyOutlined />, label: 'Đổi mật khẩu', onClick: () => setPasswordOpen(true) },

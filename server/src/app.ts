@@ -132,7 +132,7 @@ export function createApp({ adapters, config, logger, stats = new StatsService()
     // Tính năng tài khoản tắt: giao diện vẫn hỏi /api/me và /api/plans để biết có cần hiện nút đăng nhập hay không.
     app.get('/api/me', (_req, res) => {
       res.setHeader('Cache-Control', 'no-store');
-      res.json({ accountsEnabled: false, user: null, tier: 'pro', entitlements: UNRESTRICTED, quota: { limit: null, used: 0, remaining: null, resetsAt: null } });
+      res.json({ accountsEnabled: false, passwordResetEnabled: false, user: null, tier: 'pro', entitlements: UNRESTRICTED, quota: { limit: null, used: 0, remaining: null, resetsAt: null } });
     });
     app.get('/api/plans', (_req, res) => {
       res.json({ accountsEnabled: false, billingEnabled: false, tiers: [], plans: [], journalRankAvailable: Boolean(journalRanker) });
@@ -464,8 +464,8 @@ export function createApp({ adapters, config, logger, stats = new StatsService()
   if (staticDir && existsSync(path.join(staticDir, 'index.html'))) {
     app.use(express.static(staticDir, { index: false, maxAge: '1h' }));
     app.get(/^(?!\/api\/).*/, (req, res) => {
-      // Trang admin không nên xuất hiện trên công cụ tìm kiếm.
-      if (req.path.startsWith('/admin')) res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+      // Trang admin và các trang riêng của tài khoản không nên xuất hiện trên công cụ tìm kiếm.
+      if (/^\/(admin|thu-vien|lich-su)(\/|$)/.test(req.path)) res.setHeader('X-Robots-Tag', 'noindex, nofollow');
       res.sendFile(path.join(staticDir, 'index.html'));
     });
   }

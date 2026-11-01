@@ -23,6 +23,8 @@ export interface AccountApi {
   ready: boolean;
   /** Máy chủ có bật tài khoản không. Tắt = ẩn mọi thứ liên quan (đăng nhập, gói, hạn mức). */
   enabled: boolean;
+  /** Máy chủ gửi được email đặt lại mật khẩu (hiện liên kết "Quên mật khẩu?"). */
+  passwordResetEnabled: boolean;
   user: AccountUser | null;
   /** Hạng hiện tại: guest (chưa đăng nhập), free, standard, pro. */
   tier: Tier;
@@ -33,6 +35,8 @@ export interface AccountApi {
   refresh: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
+  /** Đặt mật khẩu mới bằng liên kết trong email (token lấy từ địa chỉ trang); đặt xong là đăng nhập luôn. */
+  resetPassword: (password: string) => Promise<void>;
   logout: () => Promise<void>;
   openAuth: (tab?: AuthTab) => void;
   /** Mở hộp thoại chọn gói; `reason` là dòng giải thích vì sao, `tier` là hạng nên chọn sẵn. */

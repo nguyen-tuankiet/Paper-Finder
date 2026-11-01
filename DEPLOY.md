@@ -138,11 +138,33 @@ npm run sepay:simulate -- <mã đơn 9 chữ số> <số tiền>
 
 Trang thanh toán sẽ tự chuyển sang "Thanh toán thành công". Thử thêm các trường hợp lỗi: `--key sai` (bị từ chối 401), số tiền thấp hơn giá đơn (không kích hoạt), `--account 111` (lệch tài khoản), `--id <số>` lặp lại cùng giá trị (không cộng lần hai), `--out` (tiền ra, bị bỏ qua). Mã QR thật vẫn hiện (ảnh do qr.sepay.vn dựng) nhưng quét chỉ có ý nghĩa với tài khoản thật.
 
-Đối soát: khoản tiền vào **không khớp đơn nào** (sai nội dung, thiếu tiền, lệch tài khoản) được ghi log mức cảnh báo `payment_needs_attention` kèm mã giao dịch; hãy xem log định kỳ và cấp gói thủ công (mục 7.4) hoặc hoàn tiền. Giao diện SePay cũng liệt kê mọi giao dịch để đối chiếu.
+Đối soát: khoản tiền vào **không khớp đơn nào** (sai nội dung, thiếu tiền, lệch tài khoản) được ghi log mức cảnh báo `payment_needs_attention` kèm mã giao dịch; hãy xem log định kỳ và cấp gói thủ công (mục 7.5) hoặc hoàn tiền. Giao diện SePay cũng liệt kê mọi giao dịch để đối chiếu.
 
-> Phần SePay được viết theo tài liệu webhook công khai của SePay và kiểm thử bằng giao dịch giả lập (đúng định dạng payload) trong mã nguồn, **chưa được thử với SePay thật**. Hãy làm bước thử ở mục 7.3.5 và xem log `payment_needs_attention` nếu đơn không tự kích hoạt. Khi thử, phải **quét mã QR trên trang** (hoặc chuyển vào đúng số hiện trên trang); chuyển vào số khác thì SePay không báo về.
+> Phần SePay được viết theo tài liệu webhook công khai của SePay và kiểm thử bằng giao dịch giả lập (đúng định dạng payload) trong mã nguồn, **chưa được thử với SePay thật**. Hãy làm bước thử ở mục 7.3 (bước 6) và xem log `payment_needs_attention` nếu đơn không tự kích hoạt. Khi thử, phải **quét mã QR trên trang** (hoặc chuyển vào đúng số hiện trên trang); chuyển vào số khác thì SePay không báo về.
 
-### 7.4. Cấp gói thủ công và xem thống kê tài khoản
+### 7.4. Gửi email quên mật khẩu (SMTP)
+
+Nút "Quên mật khẩu?" ở hộp đăng nhập chỉ hiện khi máy chủ gửi được email. Cần một dịch vụ SMTP; cách nhanh và miễn phí nhất là dùng Gmail của bạn:
+
+1. Bật xác minh 2 bước cho tài khoản Google, rồi vào [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) tạo **mật khẩu ứng dụng** (16 ký tự). Không dùng mật khẩu Gmail thật.
+2. Trên Render thêm biến:
+
+| Biến | Giá trị |
+|---|---|
+| `SMTP_HOST` | `smtp.gmail.com` |
+| `SMTP_PORT` | `587` |
+| `SMTP_USER` | địa chỉ Gmail của bạn |
+| `SMTP_PASS` | mật khẩu ứng dụng ở bước 1 |
+| `SMTP_FROM` | `PaperFinder <địa-chỉ-gmail>` |
+| `PUBLIC_BASE_URL` | địa chỉ trang, vd. `https://paperfinder.onrender.com` (không có dấu `/` cuối) |
+
+Gmail giới hạn khoảng 500 thư mỗi ngày và thư dễ vào hộp thư rác hơn gửi từ tên miền riêng. Khi có tên miền, nên chuyển sang Brevo, Mailgun hoặc Resend (đều có gói miễn phí và thông tin SMTP tương tự, chỉ cần đổi 4 biến `SMTP_*`).
+
+Cách hoạt động và an toàn: liên kết có hiệu lực **1 giờ** và **chỉ dùng được một lần** (đổi mật khẩu xong, hoặc người dùng tự đổi bằng cách khác, là liên kết cũ vô hiệu); mọi phiên đăng nhập cũ bị đăng xuất. Hệ thống trả lời giống nhau dù email có tài khoản hay không (không lộ ai đã đăng ký), mỗi email chỉ nhận một thư mỗi phút và mỗi địa chỉ IP tối đa 5 yêu cầu mỗi giờ. Liên kết do máy chủ ký bằng `SESSION_SECRET`, không lưu trong cơ sở dữ liệu; đổi `SESSION_SECRET` sẽ làm các liên kết chưa dùng mất hiệu lực. Thư gửi lỗi được ghi log `password_reset_mail_failed`.
+
+**Thử ở máy local không cần SMTP:** chạy `npm run dev`, bấm "Quên mật khẩu?" và nhập email đã đăng ký. Nội dung thư (kèm liên kết `http://localhost:5173/?reset=...`) được ghi vào cửa sổ chạy backend ở dòng `mail_console`; sao chép liên kết đó vào trình duyệt.
+
+### 7.5. Cấp gói thủ công và xem thống kê tài khoản
 
 Cần `ADMIN_PASSWORD`. Ví dụ cấp 30 ngày hạng Pro (`tier` là `standard` hoặc `pro`, mặc định `pro`) bằng PowerShell:
 

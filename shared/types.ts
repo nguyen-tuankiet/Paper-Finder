@@ -225,6 +225,8 @@ export interface AccountUser {
 
 export interface MeResponse {
   accountsEnabled: boolean;
+  /** Máy chủ có gửi được email đặt lại mật khẩu hay không (cần cấu hình SMTP). */
+  passwordResetEnabled: boolean;
   user: AccountUser | null;
   /** Hạng hiện tại (guest khi chưa đăng nhập). */
   tier: Tier;

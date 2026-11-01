@@ -43,3 +43,16 @@ services:
         sync: false
       - key: SEPAY_CODE_PREFIX
         value: PF
+      # Gửi email quên mật khẩu (DEPLOY.md mục 7.5). Thiếu SMTP_HOST/SMTP_FROM/PUBLIC_BASE_URL = tắt tính năng quên mật khẩu.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false

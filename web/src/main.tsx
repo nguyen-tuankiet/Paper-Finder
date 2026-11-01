@@ -4,11 +4,15 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import AdminPage from './AdminPage';
+import HistoryPage from './HistoryPage';
+import LibraryPage from './LibraryPage';
 import { AccountProvider } from './lib/account';
 import './styles.css';
 
-// Chỉ có hai trang nên không cần thư viện router: /admin là trang quản trị, còn lại là trang tìm kiếm.
-const isAdmin = window.location.pathname.replace(/\/+$/, '') === '/admin';
+// Ít trang nên không cần thư viện router: /admin (quản trị), /thu-vien (thư viện cá nhân), /lich-su (lịch sử tìm kiếm); còn lại là trang tìm kiếm.
+const path = window.location.pathname.replace(/\/+$/, '');
+const isAdmin = path === '/admin';
+const AccountPage = path === '/thu-vien' ? LibraryPage : path === '/lich-su' ? HistoryPage : App;
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -32,7 +36,7 @@ createRoot(document.getElementById('root')!).render(
         <AdminPage />
       ) : (
         <AccountProvider>
-          <App />
+          <AccountPage />
         </AccountProvider>
       )}
     </ConfigProvider>

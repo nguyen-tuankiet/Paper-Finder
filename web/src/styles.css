@@ -1120,19 +1120,6 @@ body {
   }
 }
 
-/* Danh sách trong ngăn thư viện / lịch sử */
-.pf-rows {
-  display: flex;
-  flex-direction: column;
-}
-.pf-row {
-  padding: 14px 0;
-  border-bottom: 1px solid var(--pf-border);
-}
-.pf-row:first-child {
-  padding-top: 0;
-}
-
 /* ---------- So sánh hạng Tiêu chuẩn và Pro cạnh nhau ---------- */
 .pf-cmp-period {
   display: flex;
@@ -1441,4 +1428,90 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* ---------- Trang Thư viện và Lịch sử ---------- */
+.pf-header-link {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+}
+.pf-header-link:hover {
+  color: #fff;
+}
+
+.pf-lib {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.pf-folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pf-folder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pf-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pf-folder:hover {
+  background: #eef2f8;
+}
+.pf-folder.is-active {
+  background: #e3ecf7;
+  color: #1f4e79;
+  font-weight: 600;
+}
+.pf-folder-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-folder-count {
+  flex: 0 0 auto;
+  color: #6b7785;
+  font-size: 12.5px;
+}
+.pf-lib-selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #eef4fb;
+}
+.pf-lib-paper {
+  min-width: 0;
+}
+@media (max-width: 860px) {
+  .pf-lib {
+    grid-template-columns: 1fr;
+  }
+  /* Thư mục thành hàng chip ngang để không chiếm chiều cao */
+  .pf-folder-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .pf-folder {
+    width: auto;
+    max-width: 100%;
+    border: 1px solid var(--pf-border);
+    background: #fff;
+  }
 }

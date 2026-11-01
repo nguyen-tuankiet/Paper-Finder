@@ -4,10 +4,11 @@ import { rateLimit } from 'express-rate-limit';
 import type { ZodType } from 'zod';
 import type { Entitlements, LibraryItem, MeResponse, PaperRecord, PaymentStatusResponse, PlansResponse } from '../../../shared/types.js';
 import type { Logger } from '../logger.js';
-import { adminGrantSchema, changePasswordSchema, checkoutSchema, confirmPaymentSchema, loginSchema, registerSchema, saveLibrarySchema } from '../schemas.js';
+import { adminGrantSchema, changePasswordSchema, checkoutSchema, confirmPaymentSchema, forgotPasswordSchema, loginSchema, registerSchema, resetPasswordSchema, saveLibrarySchema } from '../schemas.js';
 import { BillingError } from './billing.js';
 import { callerFrom, callerOf, currentSession, currentUser, toAccountUser, type AccountsContext } from './context.js';
 import { buildRevenueReport } from './revenue.js';
+import { passwordFingerprint, resetEmail } from './resetToken.js';
 import { burnPasswordCheck, hashPassword, verifyPassword } from './passwords.js';
 import { parseSepayPayload, verifyApiKey } from './sepay.js';
 import { SESSION_TTL_MS, clearedSessionCookie, sessionCookie } from './session.js';
@@ -68,6 +69,15 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
     legacyHeaders: false,
     message: { error: 'rate_limited', message: 'Tạo tài khoản quá nhiều lần từ địa chỉ này. Vui lòng thử lại sau.' },
   });
+  // Yêu cầu quên mật khẩu: tối đa 5 lần mỗi giờ cho mỗi địa chỉ IP, và mỗi email chỉ nhận một thư mỗi phút (tránh dùng làm công cụ spam hộp thư người khác).
+  const forgotLimiter = rateLimit({
+    windowMs: 60 * 60_000,
+    limit: ctx.rateLimits.forgotPerHour,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'rate_limited', message: 'Bạn đã yêu cầu quá nhiều lần. Vui lòng thử lại sau.' },
+  });
+  const lastResetMail = new Map<string, number>();
   const apiLimiter = rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: 'draft-7', legacyHeaders: false, message: { error: 'rate_limited', message: 'Bạn thao tác quá nhanh.' } });
 
   const noStore: RequestHandler = (_req, res, next) => {
@@ -119,6 +129,7 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
       if (session && session.expiresAt - ctx.now().getTime() < SESSION_TTL_MS / 2) startSession(req, res, session.user);
       const body: MeResponse = {
         accountsEnabled: true,
+        passwordResetEnabled: Boolean(ctx.mail),
         user: caller.user ? toAccountUser(caller.user, ctx.now()) : null,
         tier: caller.tier,
         entitlements: caller.entitlements,
@@ -192,6 +203,60 @@ export function registerAccountRoutes(app: Express, { ctx, logger, checkAdmin, a
       const updated = await ctx.store.getUserById(user.id);
       if (updated) startSession(req, res, updated);
       res.json({ ok: true });
+    }),
+  );
+
+  // ---------- Quên mật khẩu ----------
+
+  app.post(
+    '/api/auth/forgot',
+    noStore,
+    forgotLimiter,
+    wrap(async (req, res) => {
+      if (!ctx.mail) {
+        res.status(503).json({ error: 'mail_disabled', message: 'Tính năng quên mật khẩu chưa được bật trên máy chủ. Vui lòng liên hệ quản trị viên.' });
+        return;
+      }
+      const input = parse(forgotPasswordSchema, req.body, res);
+      if (!input) return;
+      const user = await ctx.store.getUserByEmail(input.email);
+      const nowMs = ctx.now().getTime();
+      const email = input.email.trim().toLowerCase();
+      if (user && nowMs - (lastResetMail.get(email) ?? 0) >= 60_000) {
+        lastResetMail.set(email, nowMs);
+        if (lastResetMail.size > 5000) for (const [key, at] of lastResetMail) if (nowMs - at >= 60_000) lastResetMail.delete(key);
+        const link = `${ctx.mail.baseUrl}/?reset=${ctx.resetTokens.create(user.id, user.passwordHash, nowMs)}`;
+        // Không đợi gửi xong rồi mới trả lời: thời gian phản hồi không tiết lộ email có tài khoản hay không.
+        void ctx.mail.mailer.send({ to: user.email, ...resetEmail(link) }).then(
+          () => logger.info('password_reset_sent', { userId: user.id }),
+          (error: unknown) => logger.error('password_reset_mail_failed', { userId: user.id, error: error instanceof Error ? error.message : String(error) }),
+        );
+      }
+      // Luôn trả lời giống nhau dù email có tồn tại hay không.
+      res.json({ ok: true });
+    }),
+  );
+
+  app.post(
+    '/api/auth/reset',
+    noStore,
+    authLimiter,
+    wrap(async (req, res) => {
+      const input = parse(resetPasswordSchema, req.body, res);
+      if (!input) return;
+      const invalid = () => res.status(400).json({ error: 'invalid_token', message: 'Liên kết đã hết hạn hoặc đã được dùng. Hãy yêu cầu liên kết mới.' });
+      const verified = ctx.resetTokens.verify(input.token, ctx.now().getTime());
+      const user = verified ? await ctx.store.getUserById(verified.userId) : null;
+      if (!verified || !user || passwordFingerprint(user.passwordHash) !== verified.fingerprint) {
+        invalid();
+        return;
+      }
+      await ctx.store.setPassword(user.id, await hashPassword(input.password));
+      // Mọi phiên cũ bị vô hiệu (sessionVersion tăng), liên kết vừa dùng cũng hết hiệu lực; đăng nhập luôn cho thiết bị này.
+      const updated = (await ctx.store.getUserById(user.id)) ?? user;
+      startSession(req, res, updated);
+      logger.info('password_reset_done', { userId: user.id });
+      res.json({ user: toAccountUser(updated, ctx.now()) });
     }),
   );
 

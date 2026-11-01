@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { PlanKey } from './accounts/plans.js';
 import type { SepayConfig } from './accounts/sepay.js';
 import type { LogLevel } from './logger.js';
+import type { SmtpConfig } from './services/mailer.js';
 
 const envSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
@@ -60,6 +61,16 @@ const envSchema = z.object({
   SEPAY_ACCOUNT_NAME: z.string().max(80).optional(),
   /** Tiền tố mã thanh toán, phải trùng "Cấu trúc mã thanh toán" trong SePay. */
   SEPAY_CODE_PREFIX: z.string().regex(/^[A-Za-z]{2,6}$/, 'SEPAY_CODE_PREFIX gồm 2-6 chữ cái').default('PF'),
+  /** Gửi email (đặt lại mật khẩu) qua SMTP, vd. Gmail (mật khẩu ứng dụng), Brevo, Mailgun, Resend. Cần đủ HOST, FROM và PUBLIC_BASE_URL. */
+  SMTP_HOST: z.string().min(1).optional(),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  /** true = TLS ngay từ đầu (thường là cổng 465); mặc định tự chọn theo cổng. */
+  SMTP_SECURE: z.enum(['true', 'false']).optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().min(3).optional(),
+  /** Địa chỉ công khai của trang, dùng dựng liên kết trong email (vd. https://paperfinder.onrender.com). */
+  PUBLIC_BASE_URL: z.url('PUBLIC_BASE_URL phải là địa chỉ đầy đủ, vd. https://paperfinder.onrender.com').optional(),
   /** File CSV xếp hạng tạp chí tải từ scimagojr.com. Mặc định ./data/scimagojr.csv; không có file thì tính năng xếp hạng tự tắt. */
   SJR_CSV_PATH: z.string().optional(),
   STATIC_DIR: z.string().optional(),
@@ -91,6 +102,8 @@ export interface AppConfig {
   /** Giá theo khóa gói, vd. prices['pro:month']. */
   prices: Record<PlanKey, number>;
   sepay?: SepayConfig;
+  /** Gửi email; `smtp` chỉ có khi đủ SMTP_HOST và SMTP_FROM. */
+  mail: { smtp?: SmtpConfig; baseUrl?: string };
   sjrCsvPath: string;
   staticDir?: string;
   logLevel: LogLevel;
@@ -163,6 +176,20 @@ export function parseConfig(env: Record<string, string | undefined>, cwd = proce
             codePrefix: parsed.SEPAY_CODE_PREFIX.toUpperCase(),
           }
         : undefined,
+    mail: {
+      smtp:
+        parsed.SMTP_HOST && parsed.SMTP_FROM
+          ? {
+              host: parsed.SMTP_HOST,
+              port: parsed.SMTP_PORT,
+              secure: parsed.SMTP_SECURE ? parsed.SMTP_SECURE === 'true' : parsed.SMTP_PORT === 465,
+              user: parsed.SMTP_USER,
+              pass: parsed.SMTP_PASS,
+              from: parsed.SMTP_FROM,
+            }
+          : undefined,
+      baseUrl: parsed.PUBLIC_BASE_URL?.replace(/\/+$/, ''),
+    },
     sjrCsvPath: parsed.SJR_CSV_PATH ? path.resolve(cwd, parsed.SJR_CSV_PATH) : path.resolve(cwd, 'data', 'scimagojr.csv'),
     staticDir,
     logLevel: parsed.LOG_LEVEL,
